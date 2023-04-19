@@ -8,6 +8,7 @@ defmodule Peep.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Peep.Worker}
       # Starts a worker by calling: Peep.Worker.start_link(arg)
       # {Peep.Worker, arg}
     ]
