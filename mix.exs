@@ -7,6 +7,7 @@ defmodule Peep.MixProject do
       version: "0.1.0",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps()
     ]
   end
@@ -14,8 +15,13 @@ defmodule Peep.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {Peep.Application, []}
+      extra_applications: [:logger]
+    ]
+  end
+
+  defp aliases do
+    [
+      compile: ["format", "compile"]
     ]
   end
 
