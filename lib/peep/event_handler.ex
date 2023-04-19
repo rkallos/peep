@@ -1,11 +1,7 @@
 defmodule Peep.EventHandler do
   require Logger
 
-  alias Telemetry.Metrics
-
-  @alpha 0.10
-  @gamma (1 + @alpha) / (1 - @alpha)
-  @denominator :math.log(@gamma)
+  alias Peep.Storage
 
   def attach(metrics, tid) do
     metrics_by_event = Enum.group_by(metrics, & &1.event_name)
@@ -44,15 +40,7 @@ defmodule Peep.EventHandler do
 
         tags = Enum.map(metric.tags, &{&1, Map.get(tag_values, &1, "")})
 
-        # Logger.info(
-        #   event: :pre_insert,
-        #   metric: metric,
-        #   measurements: measurements,
-        #   metadata: metadata,
-        #   value: value
-        # )
-
-        insert_metric(tid, metric, value, tags)
+        Storage.insert_metric(tid, metric, value, tags)
       end
     end
   end
@@ -78,25 +66,5 @@ defmodule Peep.EventHandler do
       key ->
         measurements[key] || 1
     end
-  end
-
-  defp insert_metric(tid, %Metrics.Counter{name: name}, value, tags) do
-    key = {:counter, name, tags}
-    :ets.update_counter(tid, key, {2, value}, {key, 0})
-  end
-
-  defp insert_metric(tid, %Metrics.LastValue{name: name}, value, tags) do
-    key = {:last_value, name, tags}
-    :ets.insert(tid, {key, value})
-  end
-
-  defp insert_metric(tid, %Metrics.Distribution{name: name}, value, tags) do
-    bucket = trunc(:math.log(value) / @denominator)
-    key = {:distribution, name, tags, bucket}
-    :ets.update_counter(tid, key, {2, 1}, {key, 0})
-  end
-
-  defp insert_metric(_tid, metric, value, tags) do
-    :ok
   end
 end
