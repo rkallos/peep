@@ -1,7 +1,7 @@
 defmodule Peep.Worker do
   use GenServer
 
-  alias Peep.EventHandler
+  alias Peep.{EventHandler, Storage}
 
   defmodule State do
     defstruct tid: nil, interval: nil, handler_ids: nil
@@ -21,7 +21,7 @@ defmodule Peep.Worker do
 
   @impl true
   def init(options) do
-    tid = :ets.new(:ordered_set, [:public])
+    tid = Storage.new()
 
     metrics = Keyword.fetch!(options, :metrics)
     handler_ids = EventHandler.attach(metrics, tid)
