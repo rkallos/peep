@@ -93,7 +93,7 @@ defmodule Peep.Statsd do
     make_packets(rest, mtu, new_acc)
   end
 
-  defp send_packets([], state) do
+  defp send_packets([], _metrics, state) do
     state
   end
 
@@ -125,7 +125,7 @@ defmodule Peep.Statsd do
           %__MODULE__{state | socket: nil}
       end
 
-    send_packets(rest, new_state)
+    send_packets(rest, metrics, new_state)
   end
 
   defp calculate_deltas(current_metrics, previous_metrics) do
