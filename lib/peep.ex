@@ -31,7 +31,7 @@ defmodule Peep do
 
   @impl true
   def init(options) do
-    tid = Storage.new()
+    tid = Storage.new(options.name)
 
     metrics = options.metrics
     handler_ids = EventHandler.attach(metrics, tid)
