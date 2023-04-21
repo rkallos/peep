@@ -124,12 +124,9 @@ defmodule Peep.Options do
 
   defp rename_socket_path(statsd_opts) do
     if socket_path = Keyword.get(statsd_opts, :socket_path) do
-      new_statsd_opts =
-        statsd_opts
-        |> Keyword.put(:host, socket_path)
-        |> Keyword.delete(:socket_path)
-
-      Keyword.put(statsd_opts, :statsd, new_statsd_opts)
+      statsd_opts
+      |> Keyword.put(:host, socket_path)
+      |> Keyword.delete(:socket_path)
     else
       statsd_opts
     end
