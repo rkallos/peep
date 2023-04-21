@@ -162,6 +162,40 @@ defmodule StatsdTest do
     assert get_statsd_packets(tid, %{formatter: :datadog}) == [lines_to_string(expected)]
   end
 
+  test "metrics are batched according to mtu option" do
+    tid = Storage.new()
+
+    for i <- 1..10 do
+      counter = Metrics.counter("storage.test.counter.#{i}")
+      last_value = Metrics.last_value("storage.test.gauge.#{i}")
+
+      for j <- 1..10 do
+        Storage.insert_metric(tid, counter, j, [])
+        Storage.insert_metric(tid, last_value, j, [])
+      end
+    end
+
+    expected_packets_100 = [
+      "storage.test.counter.2:55|c\nstorage.test.counter.10:55|c\nstorage.test.counter.1:55|c\n",
+      "storage.test.counter.5:55|c\nstorage.test.counter.4:55|c\nstorage.test.counter.3:55|c\n",
+      "storage.test.counter.8:55|c\nstorage.test.counter.7:55|c\nstorage.test.counter.6:55|c\n",
+      "storage.test.gauge.10:10|g\nstorage.test.gauge.1:10|g\nstorage.test.counter.9:55|c\n",
+      "storage.test.gauge.4:10|g\nstorage.test.gauge.3:10|g\nstorage.test.gauge.2:10|g\n",
+      "storage.test.gauge.7:10|g\nstorage.test.gauge.6:10|g\nstorage.test.gauge.5:10|g\n",
+      "storage.test.gauge.9:10|g\nstorage.test.gauge.8:10|g\n"
+    ]
+
+    assert get_statsd_packets(tid, %{mtu: 100}) == expected_packets_100
+
+    expected_packets_200 = [
+      "storage.test.counter.5:55|c\nstorage.test.counter.4:55|c\nstorage.test.counter.3:55|c\nstorage.test.counter.2:55|c\nstorage.test.counter.10:55|c\nstorage.test.counter.1:55|c\n",
+      "storage.test.gauge.2:10|g\nstorage.test.gauge.10:10|g\nstorage.test.gauge.1:10|g\nstorage.test.counter.9:55|c\nstorage.test.counter.8:55|c\nstorage.test.counter.7:55|c\nstorage.test.counter.6:55|c\n",
+      "storage.test.gauge.9:10|g\nstorage.test.gauge.8:10|g\nstorage.test.gauge.7:10|g\nstorage.test.gauge.6:10|g\nstorage.test.gauge.5:10|g\nstorage.test.gauge.4:10|g\nstorage.test.gauge.3:10|g\n"
+    ]
+
+    assert get_statsd_packets(tid, %{mtu: 200}) == expected_packets_200
+  end
+
   defp get_statsd_packets(tid, opts \\ %{}) do
     formatter = opts[:formatter] || :standard
     mtu = opts[:mtu] || 1_000_000
