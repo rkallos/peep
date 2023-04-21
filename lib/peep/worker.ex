@@ -12,21 +12,21 @@ defmodule Peep.Worker do
   end
 
   def child_spec(options) do
-    %{id: __MODULE__, start: {__MODULE__, :start_link, [options]}}
+    %{id: peep_name!(options), start: {__MODULE__, :start_link, [options]}}
   end
 
   def start_link(options) do
     case Options.validate(options) do
       {:ok, options} ->
-        GenServer.start_link(__MODULE__, options, name: __MODULE__)
+        GenServer.start_link(__MODULE__, options, name: options.name)
 
       {:error, _} = err ->
         err
     end
   end
 
-  def get_all_metrics() do
-    GenServer.call(__MODULE__, :get_all_metrics)
+  def get_all_metrics(name_or_pid) do
+    GenServer.call(name_or_pid, :get_all_metrics)
   end
 
   @impl true
@@ -73,5 +73,9 @@ defmodule Peep.Worker do
 
   defp set_statsd_timer(interval) do
     Process.send_after(self(), :statsd_flush, interval)
+  end
+
+  defp peep_name!(options) do
+    Keyword.get(options, :name) || raise(ArgumentError, "a name must be provided")
   end
 end
