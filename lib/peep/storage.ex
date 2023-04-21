@@ -5,9 +5,9 @@ defmodule Peep.Storage do
   @gamma (1 + @alpha) / (1 - @alpha)
   @denominator :math.log(@gamma)
 
-  @spec new() :: :ets.tid()
-  def new() do
-    :ets.new(:ordered_set, [:public])
+  @spec new(atom) :: :ets.tid()
+  def new(name) do
+    :ets.new(name, [:public, :named_table])
   end
 
   def insert_metric(tid, %Metrics.Counter{} = metric, value, tags) do
