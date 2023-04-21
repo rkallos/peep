@@ -34,6 +34,11 @@ defmodule Peep.Options do
   ]
 
   @schema [
+    name: [
+      type: :atom,
+      required: true,
+      doc: "A name for the Peep worker process"
+    ],
     metrics: [
       type: {:list, :any},
       required: true,
