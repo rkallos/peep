@@ -65,7 +65,7 @@ defmodule Peep.Statsd do
     |> calculate_deltas(prev)
     |> make_lines(statsd_opts[:formatter])
     |> make_packets(statsd_opts[:mtu])
-    |> send_packets(try_to_open_socket(state))
+    |> send_packets(metrics, try_to_open_socket(state))
   end
 
   def make_packets(metrics, mtu) do
@@ -97,18 +97,26 @@ defmodule Peep.Statsd do
     state
   end
 
-  defp send_packets(_packets, %__MODULE__{socket: nil} = state) do
+  defp send_packets(_packets, _metrics, %__MODULE__{socket: nil} = state) do
     state
   end
 
   defp send_packets(
          [packet | rest],
+         metrics,
          %__MODULE__{prev: prev, statsd_opts: opts, socket: socket} = state
        ) do
     new_state =
       case Packet.send(packet, socket, opts) do
         :ok ->
-          %__MODULE__{state | prev: Map.merge(prev, Enum.into(packet.metrics, %{}))}
+          successfully_sent_metric_keys =
+            for {metric, _} <- packet.metrics do
+              metric
+            end
+
+          successfully_sent_metrics = Map.take(metrics, successfully_sent_metric_keys)
+
+          %__MODULE__{state | prev: Map.merge(prev, successfully_sent_metrics)}
 
         {:error, :eagain} ->
           state
