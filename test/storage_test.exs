@@ -39,16 +39,16 @@ defmodule StorageTest do
   end
 
   test "a distribution can be stored and retrieved" do
-    tid = Storage.new()
+    tid = Storage.new(:distribution_storage_test)
 
     dist = Metrics.distribution("storage.test.distribution")
 
-    for i <- 1..1000 do
+    for i <- 0..1000 do
       Storage.insert_metric(tid, dist, i, [])
     end
 
     expected = %{
-      "1.0" => 1,
+      "1.0" => 2,
       "2.23152" => 1,
       "3.333505" => 1,
       "4.074283" => 1,
