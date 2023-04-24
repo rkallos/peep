@@ -21,7 +21,7 @@ defmodule Peep.Storage do
   end
 
   def insert_metric(tid, %Metrics.Distribution{} = metric, value, tags) do
-    bucket = ceil(:math.log(value) / @denominator)
+    bucket = calculate_bucket(value)
     bucket_key = {metric, tags, bucket}
     sum_key = {metric, tags, :sum}
     :ets.update_counter(tid, bucket_key, {2, 1}, {bucket_key, 0})
@@ -57,6 +57,14 @@ defmodule Peep.Storage do
           {bucket_idx_to_upper_bound(bucket_idx), count}
         end
     end
+  end
+
+  defp calculate_bucket(0) do
+    0
+  end
+
+  defp calculate_bucket(value) do
+    ceil(:math.log(value) / @denominator)
   end
 
   defp group_metrics(metrics), do: group_metrics(metrics, %{})
