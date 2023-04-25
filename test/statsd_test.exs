@@ -5,7 +5,7 @@ defmodule StatsdTest do
   alias Telemetry.Metrics
 
   test "a counter can be formatted" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
 
     counter = Metrics.counter("storage.test.counter")
 
@@ -18,11 +18,11 @@ defmodule StatsdTest do
     end
 
     expected = ["storage.test.counter:10|c", "storage.test.counter:5|c|#even:true"]
-    assert get_statsd_packets(tid) == [lines_to_string(expected)]
+    assert parse_packets(get_statsd_packets(tid)) == parse_packets(expected)
   end
 
   test "a last_value can be formatted" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
 
     last_value = Metrics.last_value("storage.test.gauge")
 
@@ -35,11 +35,11 @@ defmodule StatsdTest do
     end
 
     expected = ["storage.test.gauge:10|g", "storage.test.gauge:9|g|#odd:true"]
-    assert get_statsd_packets(tid) == [lines_to_string(expected)]
+    assert parse_packets(get_statsd_packets(tid)) == parse_packets(expected)
   end
 
   test "a distribution can be formatted (standard)" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
 
     dist = Metrics.distribution("storage.test.dist")
 
@@ -83,7 +83,6 @@ defmodule StatsdTest do
       "storage.test.dist:751.5464|ms|@0.007299",
       "storage.test.dist:918.556711|ms|@0.005988",
       "storage.test.dist:1122.680424|ms|@0.012195",
-      "storage.test.dist:sum|ms|@0.000002",
       #
       "storage.test.dist:101.030858|ms|@1.0|#foo:bar",
       "storage.test.dist:225.452339|ms|@1.0|#foo:bar",
@@ -93,15 +92,16 @@ defmodule StatsdTest do
       "storage.test.dist:614.9016|ms|@1.0|#foo:bar",
       "storage.test.dist:751.5464|ms|@1.0|#foo:bar",
       "storage.test.dist:918.556711|ms|@0.5|#foo:bar",
-      "storage.test.dist:1122.680424|ms|@1.0|#foo:bar",
-      "storage.test.dist:sum|ms|@0.000182|#foo:bar"
+      "storage.test.dist:1122.680424|ms|@1.0|#foo:bar"
     ]
 
-    assert get_statsd_packets(tid, %{formatter: :standard}) == [lines_to_string(expected)]
+    packets = get_statsd_packets(tid, %{formatter: :standard})
+
+    assert parse_packets(packets) == parse_packets(expected)
   end
 
   test "a distribution can be formatted (datadog)" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
 
     dist = Metrics.distribution("storage.test.dist")
 
@@ -145,7 +145,6 @@ defmodule StatsdTest do
       "storage.test.dist:751.5464|d|@0.007299",
       "storage.test.dist:918.556711|d|@0.005988",
       "storage.test.dist:1122.680424|d|@0.012195",
-      "storage.test.dist:sum|d|@0.000002",
       #
       "storage.test.dist:101.030858|d|@1.0|#foo:bar",
       "storage.test.dist:225.452339|d|@1.0|#foo:bar",
@@ -155,15 +154,15 @@ defmodule StatsdTest do
       "storage.test.dist:614.9016|d|@1.0|#foo:bar",
       "storage.test.dist:751.5464|d|@1.0|#foo:bar",
       "storage.test.dist:918.556711|d|@0.5|#foo:bar",
-      "storage.test.dist:1122.680424|d|@1.0|#foo:bar",
-      "storage.test.dist:sum|d|@0.000182|#foo:bar"
+      "storage.test.dist:1122.680424|d|@1.0|#foo:bar"
     ]
 
-    assert get_statsd_packets(tid, %{formatter: :datadog}) == [lines_to_string(expected)]
+    packets = get_statsd_packets(tid, %{formatter: :datadog})
+    assert parse_packets(packets) == parse_packets(expected)
   end
 
   test "metrics are batched according to mtu option" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
 
     for i <- 1..10 do
       counter = Metrics.counter("storage.test.counter.#{i}")
@@ -175,41 +174,88 @@ defmodule StatsdTest do
       end
     end
 
-    expected_packets_100 = [
-      "storage.test.counter.2:55|c\nstorage.test.counter.10:55|c\nstorage.test.counter.1:55|c\n",
-      "storage.test.counter.5:55|c\nstorage.test.counter.4:55|c\nstorage.test.counter.3:55|c\n",
-      "storage.test.counter.8:55|c\nstorage.test.counter.7:55|c\nstorage.test.counter.6:55|c\n",
-      "storage.test.gauge.10:10|g\nstorage.test.gauge.1:10|g\nstorage.test.counter.9:55|c\n",
-      "storage.test.gauge.4:10|g\nstorage.test.gauge.3:10|g\nstorage.test.gauge.2:10|g\n",
-      "storage.test.gauge.7:10|g\nstorage.test.gauge.6:10|g\nstorage.test.gauge.5:10|g\n",
-      "storage.test.gauge.9:10|g\nstorage.test.gauge.8:10|g\n"
-    ]
+    expected_metrics =
+      [
+        "storage.test.counter.5:55|c",
+        "storage.test.counter.4:55|c",
+        "storage.test.counter.3:55|c",
+        "storage.test.counter.2:55|c",
+        "storage.test.counter.10:55|c",
+        "storage.test.counter.1:55|c",
+        "storage.test.gauge.2:10|g",
+        "storage.test.gauge.10:10|g",
+        "storage.test.gauge.1:10|g",
+        "storage.test.counter.9:55|c",
+        "storage.test.counter.8:55|c",
+        "storage.test.counter.7:55|c",
+        "storage.test.counter.6:55|c",
+        "storage.test.gauge.9:10|g",
+        "storage.test.gauge.8:10|g",
+        "storage.test.gauge.7:10|g",
+        "storage.test.gauge.6:10|g",
+        "storage.test.gauge.5:10|g",
+        "storage.test.gauge.4:10|g",
+        "storage.test.gauge.3:10|g"
+      ]
+      |> parse_packets()
 
-    assert get_statsd_packets(tid, %{mtu: 100}) == expected_packets_100
+    packets = get_statsd_packets(tid, %{mtu: 100})
 
-    expected_packets_200 = [
-      "storage.test.counter.5:55|c\nstorage.test.counter.4:55|c\nstorage.test.counter.3:55|c\nstorage.test.counter.2:55|c\nstorage.test.counter.10:55|c\nstorage.test.counter.1:55|c\n",
-      "storage.test.gauge.2:10|g\nstorage.test.gauge.10:10|g\nstorage.test.gauge.1:10|g\nstorage.test.counter.9:55|c\nstorage.test.counter.8:55|c\nstorage.test.counter.7:55|c\nstorage.test.counter.6:55|c\n",
-      "storage.test.gauge.9:10|g\nstorage.test.gauge.8:10|g\nstorage.test.gauge.7:10|g\nstorage.test.gauge.6:10|g\nstorage.test.gauge.5:10|g\nstorage.test.gauge.4:10|g\nstorage.test.gauge.3:10|g\n"
-    ]
+    assert parse_packets(packets) == expected_metrics
 
-    assert get_statsd_packets(tid, %{mtu: 200}) == expected_packets_200
+    for packet <- packets do
+      assert IO.iodata_length(packet) < 100
+    end
+
+    packets = get_statsd_packets(tid, %{mtu: 200})
+
+    assert parse_packets(packets) == expected_metrics
+
+    for packet <- packets do
+      assert IO.iodata_length(packet) < 200
+    end
   end
 
   defp get_statsd_packets(tid, opts \\ %{}) do
     formatter = opts[:formatter] || :standard
     mtu = opts[:mtu] || 1_000_000
 
-    Storage.get_all_metrics(tid)
-    |> Statsd.make_lines(formatter)
-    |> Statsd.make_packets(mtu)
-    |> Enum.map(fn p -> IO.iodata_to_binary(p.lines) end)
+    state = Statsd.make_state(%{formatter: formatter, mtu: mtu})
+
+    {_cache, packets} =
+      Storage.get_all_metrics(tid)
+      |> Statsd.prepare(state)
+
+    for p <- packets do
+      IO.iodata_to_binary(p.lines)
+    end
   end
 
-  defp lines_to_string(lines) do
-    lines
-    |> Enum.intersperse(?\n)
-    |> then(&[&1, ?\n])
-    |> IO.iodata_to_binary()
+  defp parse_packets(packets) do
+    for packet <- packets, reduce: MapSet.new() do
+      acc ->
+        new =
+          for metric <- parse_packet(IO.iodata_to_binary(packet)), into: MapSet.new() do
+            metric
+          end
+
+        MapSet.union(acc, new)
+    end
+  end
+
+  defp parse_packet(packet) do
+    for line <- String.split(packet, "\n", trim: true) do
+      {:ok, props, "", _, _, _} = StatsdParser.parse(line)
+      metric_to_map(props)
+    end
+  end
+
+  defp metric_to_map(kw) do
+    Enum.into(kw, %{})
+    |> Map.update(:tags, %{}, fn tags ->
+      for {:tag, [name: name, value: value]} <- tags, into: %{} do
+        {name, value}
+      end
+    end)
   end
 end

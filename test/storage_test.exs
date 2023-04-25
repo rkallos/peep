@@ -5,7 +5,7 @@ defmodule StorageTest do
   alias Telemetry.Metrics
 
   test "a counter can be stored and retrieved" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
 
     counter = Metrics.counter("storage.test.counter")
 
@@ -22,7 +22,7 @@ defmodule StorageTest do
   end
 
   test "a last_value can be stored and retrieved" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
 
     last_value = Metrics.last_value("storage.test.gauge")
 

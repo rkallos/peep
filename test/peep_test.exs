@@ -23,4 +23,14 @@ defmodule PeepTest do
       assert Process.alive?(pid)
     end
   end
+
+  test "a worker with no statsd config has no statsd state" do
+    options = [
+      name: :"#{__MODULE__}_no_statsd",
+      metrics: []
+    ]
+
+    assert {:ok, pid} = Peep.start_link(options)
+    assert match?(%{statsd_state: nil}, :sys.get_state(pid))
+  end
 end

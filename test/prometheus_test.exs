@@ -5,7 +5,7 @@ defmodule PrometheusTest do
   alias Telemetry.Metrics
 
   test "counter formatting" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
     counter = Metrics.counter("storage.test.counter", description: "a counter")
 
     Storage.insert_metric(tid, counter, 5, foo: :bar, baz: "quux")
@@ -20,7 +20,7 @@ defmodule PrometheusTest do
   end
 
   test "last_value formatting" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
     last_value = Metrics.last_value("storage.test.gauge", description: "a last_value")
 
     Storage.insert_metric(tid, last_value, 5, blee: :bloo, flee: "floo")
@@ -35,7 +35,7 @@ defmodule PrometheusTest do
   end
 
   test "dist formatting" do
-    tid = Storage.new()
+    tid = Storage.new(elem(__ENV__.function, 0))
     dist = Metrics.distribution("storage.test.distribution", description: "a distribution")
 
     for i <- 1..1000 do

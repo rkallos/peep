@@ -43,11 +43,18 @@ defmodule Peep do
       set_statsd_timer(statsd_flush_interval)
     end
 
+    statsd_state =
+      if options.statsd do
+        Statsd.make_state(statsd_opts)
+      else
+        nil
+      end
+
     state = %State{
       tid: tid,
       handler_ids: handler_ids,
       statsd_opts: statsd_opts,
-      statsd_state: Statsd.make_state(statsd_opts)
+      statsd_state: statsd_state
     }
 
     {:ok, state}
@@ -59,6 +66,10 @@ defmodule Peep do
   end
 
   @impl true
+  def handle_info(:statsd_flush, %State{statsd_state: nil} = state) do
+    {:noreply, state}
+  end
+
   def handle_info(
         :statsd_flush,
         %State{tid: tid, statsd_state: statsd_state, statsd_opts: statsd_opts} = state
