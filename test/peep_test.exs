@@ -2,6 +2,9 @@ defmodule PeepTest do
   use ExUnit.Case
   doctest Peep
 
+  alias Peep.Storage
+  alias Telemetry.Metrics
+
   test "a worker can be started" do
     options = [
       name: __MODULE__,
@@ -32,5 +35,40 @@ defmodule PeepTest do
 
     assert {:ok, pid} = Peep.start_link(options)
     assert match?(%{statsd_state: nil}, :sys.get_state(pid))
+  end
+
+  test "a worker with non-empty global_tags applies to all metrics" do
+    name = :"#{__MODULE__}_global_tags"
+
+    tags = [foo: "bar", baz: "quux"]
+    tag_keys = [:foo, :baz]
+
+    counter = Metrics.counter("peep.counter", event_name: [:counter], tags: tag_keys)
+    sum = Metrics.sum("peep.sum", event_name: [:sum], measurement: :count, tags: tag_keys)
+
+    last_value =
+      Metrics.last_value("peep.gauge", event_name: [:gauge], measurement: :value, tags: tag_keys)
+
+    distribution =
+      Metrics.distribution("peep.dist", event_name: [:dist], measurement: :value, tags: tag_keys)
+
+    metrics = [counter, sum, last_value, distribution]
+
+    options = [
+      name: name,
+      metrics: metrics,
+      global_tags: tags
+    ]
+
+    assert {:ok, _pid} = Peep.start_link(options)
+    :telemetry.execute([:counter], %{})
+    :telemetry.execute([:sum], %{count: 5})
+    :telemetry.execute([:gauge], %{value: 10})
+    :telemetry.execute([:dist], %{value: 15})
+
+    assert Storage.get_metric(name, counter, tags) == 1
+    assert Storage.get_metric(name, sum, tags) == 5
+    assert Storage.get_metric(name, last_value, tags) == 10
+    assert Storage.get_metric(name, distribution, tags).sum == 15
   end
 end

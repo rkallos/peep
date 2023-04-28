@@ -34,7 +34,7 @@ defmodule Peep do
     tid = Storage.new(options.name)
 
     metrics = options.metrics
-    handler_ids = EventHandler.attach(metrics, tid)
+    handler_ids = EventHandler.attach(metrics, tid, options.global_tags)
 
     statsd_opts = options.statsd
     statsd_flush_interval = statsd_opts[:flush_interval_ms]

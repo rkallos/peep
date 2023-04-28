@@ -17,8 +17,7 @@ defmodule Peep.EventHandler do
           %{
             tid: tid,
             metrics: metrics,
-            # TODO: Add global tags
-            global_tags: []
+            global_tags: global_tags
           }
         )
 
