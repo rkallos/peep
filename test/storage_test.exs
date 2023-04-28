@@ -103,4 +103,34 @@ defmodule StorageTest do
 
     assert Storage.get_metric(tid, dist, []) == expected
   end
+
+  test "distribution bucket variability" do
+    tid = Storage.new(StorageCounter.fresh_id(), 0.25)
+
+    dist = Metrics.distribution("storage.test.distribution")
+
+    for i <- 0..1000 do
+      Storage.insert_metric(tid, dist, i, [])
+    end
+
+    expected = %{
+      "1.0" => 2,
+      "2.777778" => 1,
+      "4.62963" => 2,
+      "7.716049" => 3,
+      "12.860082" => 5,
+      "21.433471" => 9,
+      "35.722451" => 14,
+      "59.537418" => 24,
+      "99.22903" => 40,
+      "165.381717" => 66,
+      "275.636195" => 110,
+      "459.393658" => 184,
+      "765.656097" => 306,
+      "1276.093494" => 235,
+      :sum => 500_500
+    }
+
+    assert Storage.get_metric(tid, dist, []) == expected
+  end
 end
