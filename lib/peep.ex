@@ -1,4 +1,12 @@
 defmodule Peep do
+  @moduledoc """
+  `Telemetry.Metrics` reporter for:
+  * StatsD-compatible metric servers
+  * Prometheus
+
+  To use it, start the reporter with `start_link/1`, providing a list of
+  `Telemetry.Metrics` metric definitions:
+  """
   use GenServer
   require Logger
   alias Peep.{EventHandler, Options, Storage, Statsd}

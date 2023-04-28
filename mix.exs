@@ -43,9 +43,10 @@ defmodule Peep.MixProject do
          runtime: false
        ]},
       {:inch_ex, "~> 2.0", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.27", runtime: false},
 
       # testing
-      {:nimble_parsec, "~> 1.3", only: [:test]}
+      {:nimble_parsec, "~> 1.3", runtime: false}
     ]
   end
 end
