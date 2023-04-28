@@ -34,6 +34,17 @@ defmodule Peep.MixProject do
     [
       {:nimble_options, "~> 1.0"},
       {:telemetry_metrics, "~> 0.6"},
+
+      # linting
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.2",
+       [
+         only: [:dev, :test],
+         runtime: false
+       ]},
+      {:inch_ex, "~> 2.0", only: [:dev, :test], runtime: false},
+
+      # testing
       {:nimble_parsec, "~> 1.3", only: [:test]}
     ]
   end
