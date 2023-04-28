@@ -23,6 +23,23 @@ defmodule StorageTest do
     assert Storage.get_metric(tid, counter, even: true) == 5
   end
 
+  test "a sum can be stored and retrieved" do
+    tid = Storage.new(StorageCounter.fresh_id())
+
+    sum = Metrics.sum("storage.test.sum")
+
+    for i <- 1..10 do
+      Storage.insert_metric(tid, sum, 2, [])
+
+      if rem(i, 2) == 0 do
+        Storage.insert_metric(tid, sum, 3, even: true)
+      end
+    end
+
+    assert Storage.get_metric(tid, sum, []) == 20
+    assert Storage.get_metric(tid, sum, even: true) == 15
+  end
+
   test "a last_value can be stored and retrieved" do
     tid = Storage.new(StorageCounter.fresh_id())
 

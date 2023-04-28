@@ -12,7 +12,28 @@ defmodule StatsdCacheTest do
 
     counter = Metrics.counter("cache.test.counter")
 
-    Storage.insert_metric(tid, counter, 10, [])
+    Storage.insert_metric(tid, counter, 1, [])
+
+    {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(tid), Cache.new([]))
+
+    assert Map.values(delta_one) == [1]
+
+    {delta_two, cache_two} = calculate_deltas_and_replacement(cache_of(tid), cache_one)
+
+    assert Map.values(delta_two) == []
+
+    Storage.insert_metric(tid, counter, 1, [])
+    {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(tid), cache_two)
+
+    assert Map.values(delta_three) == [1]
+  end
+
+  test "a sum with no increments is omitted from delta" do
+    tid = Storage.new(StorageCounter.fresh_id())
+
+    sum = Metrics.sum("cache.test.counter")
+
+    Storage.insert_metric(tid, sum, 10, [])
 
     {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(tid), Cache.new([]))
 
@@ -22,7 +43,7 @@ defmodule StatsdCacheTest do
 
     assert Map.values(delta_two) == []
 
-    Storage.insert_metric(tid, counter, 10, [])
+    Storage.insert_metric(tid, sum, 10, [])
     {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(tid), cache_two)
 
     assert Map.values(delta_three) == [10]

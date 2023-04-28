@@ -10,7 +10,12 @@ defmodule Peep.Storage do
     :ets.new(name, [:public, :named_table])
   end
 
-  def insert_metric(tid, %Metrics.Counter{} = metric, value, tags) do
+  def insert_metric(tid, %Metrics.Counter{} = metric, _value, tags) do
+    key = {metric, tags}
+    :ets.update_counter(tid, key, {2, 1}, {key, 0})
+  end
+
+  def insert_metric(tid, %Metrics.Sum{} = metric, value, tags) do
     key = {metric, tags}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
@@ -34,6 +39,13 @@ defmodule Peep.Storage do
   end
 
   def get_metric(tid, %Metrics.Counter{} = metric, tags) do
+    case :ets.lookup(tid, {metric, tags}) do
+      [{_key, count}] -> count
+      _ -> nil
+    end
+  end
+
+  def get_metric(tid, %Metrics.Sum{} = metric, tags) do
     case :ets.lookup(tid, {metric, tags}) do
       [{_key, count}] -> count
       _ -> nil
@@ -72,6 +84,14 @@ defmodule Peep.Storage do
   defp group_metrics([], acc), do: acc
 
   defp group_metrics([{{%Metrics.Counter{} = metric, tags}, value} | rest], acc) do
+    inner_map =
+      Map.get(acc, metric, %{})
+      |> Map.put_new(tags, value)
+
+    group_metrics(rest, Map.put(acc, metric, inner_map))
+  end
+
+  defp group_metrics([{{%Metrics.Sum{} = metric, tags}, value} | rest], acc) do
     inner_map =
       Map.get(acc, metric, %{})
       |> Map.put_new(tags, value)

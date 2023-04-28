@@ -2,8 +2,9 @@ defmodule Peep.EventHandler do
   require Logger
 
   alias Peep.Storage
+  alias Telemetry.Metrics.Counter
 
-  def attach(metrics, tid) do
+  def attach(metrics, tid, global_tags) do
     metrics_by_event = Enum.group_by(metrics, & &1.event_name)
 
     for {event_name, metrics} <- metrics_by_event do
@@ -50,6 +51,10 @@ defmodule Peep.EventHandler do
 
   defp keep?(%{keep: nil}, _metadata), do: true
   defp keep?(%{keep: keep}, metadata), do: keep.(metadata)
+
+  defp fetch_measurement(%Counter{}, _measurements, _metadata) do
+    1
+  end
 
   defp fetch_measurement(metric, measurements, metadata) do
     case metric.measurement do
