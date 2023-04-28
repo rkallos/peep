@@ -1,4 +1,5 @@
 defmodule Peep.EventHandler do
+  @moduledoc false
   require Logger
 
   alias Peep.Storage

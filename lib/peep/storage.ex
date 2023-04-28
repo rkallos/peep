@@ -1,4 +1,5 @@
 defmodule Peep.Storage do
+  @moduledoc false
   alias Telemetry.Metrics
 
   @spec new(atom, float) :: :ets.tid()

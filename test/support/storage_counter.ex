@@ -1,4 +1,5 @@
 defmodule Peep.Support.StorageCounter do
+  @moduledoc false
   use Agent
 
   def start() do

@@ -1,14 +1,19 @@
 defmodule Peep.MixProject do
   use Mix.Project
 
+  @version "1.0.0"
+
   def project do
     [
       app: :peep,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      docs: docs(),
+      description: description(),
+      package: package(),
       elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
@@ -47,6 +52,30 @@ defmodule Peep.MixProject do
 
       # testing
       {:nimble_parsec, "~> 1.3", runtime: false}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "Peep",
+      canonical: "http://hexdocs.pm/peep",
+      source_url: "https://github.com/rkallos/peep",
+      source_ref: "v#{@version}",
+      extras: []
+    ]
+  end
+
+  defp description do
+    """
+    Provides an opinionated Telemetry.Metrics reporter that supports StatsD and Prometheus.
+    """
+  end
+
+  defp package do
+    [
+      maintainers: ["Richard Kallos", "Fabien Lamarche-Filion"],
+      licenses: ["Apache-2.0"],
+      links: %{"GitHub" => "https://github.com/rkallos/peep"}
     ]
   end
 end

@@ -1,4 +1,5 @@
 defmodule StatsdParser do
+  @moduledoc false
   import NimbleParsec
 
   name = ascii_string([not: ?:], min: 1) |> unwrap_and_tag(:name)
@@ -11,10 +12,6 @@ defmodule StatsdParser do
     ])
     |> reduce({Enum, :join, [""]})
     |> map({String, :to_float, []})
-
-  # integer(min: 1)
-  # |> string(".")
-  # |> integer(min: 1)
 
   type =
     choice([

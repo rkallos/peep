@@ -17,7 +17,8 @@ defmodule Peep.Options do
     ],
     socket_path: [
       type: {:custom, __MODULE__, :socket_path, []},
-      doc: "Path to the Unix Domain Socket used for publishing instead of the hostname and port."
+      doc:
+        "Path to the Unix Domain Socket used for publishing instead of the hostname and port. Overrides `:host` and `:port` configuration if present"
     ],
     formatter: [
       type: {:custom, __MODULE__, :formatter, []},
@@ -28,8 +29,10 @@ defmodule Peep.Options do
     mtu: [
       type: :non_neg_integer,
       default: 1472,
-      doc:
-        "Determine max size of statsd packets. For UDP, 1472 is a good choice. For UDS, 8192 is probably better."
+      doc: """
+        Determine max size of statsd packets. For UDP, 1472 is a good choice. For UDS, 8192 is probably better.
+        The rationale for these recommendations comes from [this guide](https://docs.datadoghq.com/developers/dogstatsd/high_throughput/#ensure-proper-packet-sizes).
+      """
     ]
   ]
 
@@ -45,7 +48,10 @@ defmodule Peep.Options do
       doc: "A list of `Telemetry.Metrics` metric definitions to be collected and exposed."
     ],
     statsd: [
-      type: {:or, [nil, {:keyword_list, @statsd_opts_schema}]}
+      type: {:or, [nil, {:keyword_list, @statsd_opts_schema}]},
+      doc:
+        "An optional keyword list of statsd configuration.\n\n" <>
+          NimbleOptions.docs(@statsd_opts_schema, nest_level: 1)
     ],
     global_tags: [
       type: :keyword_list,
@@ -61,6 +67,12 @@ defmodule Peep.Options do
         "A percentage reflecting roughly half the amount by which bucket boundaries should vary. For example, with a value of 10%, the bucket after 100 would store values roughly in the range of 101..120, meaning the bucket's midpoint is 110. The bucket after that would store values roughly in the range 120..144, with a midpoint of 131. A smaller value trades memory (:ets table size) for precision."
     ]
   ]
+
+  @moduledoc """
+  Options for a `Peep` reporter. Validated with `NimbleOptions`.
+
+  #{NimbleOptions.docs(@schema, nest_level: 0)}
+  """
 
   defstruct Keyword.keys(@schema)
 
@@ -82,6 +94,7 @@ defmodule Peep.Options do
     end
   end
 
+  @doc false
   @spec host(term()) ::
           {:ok, :inet.ip_address() | :inet.hostname()} | {:error, String.t()}
   def host(address) when is_tuple(address) do
@@ -102,6 +115,7 @@ defmodule Peep.Options do
     {:error, "expected :host to be an IP address or a hostname, got #{inspect(term)}"}
   end
 
+  @doc false
   @spec socket_path(term()) :: {:ok, :inet.local_address()} | {:error, String.t()}
   def socket_path(path) when is_binary(path) do
     {:ok, {:local, to_charlist(path)}}
@@ -111,6 +125,7 @@ defmodule Peep.Options do
     {:error, "expected :socket_path to be a string, got #{inspect(term)}"}
   end
 
+  @doc false
   @spec formatter(term()) :: {:ok, :standard | :datadog} | {:error, String.t()}
   def formatter(:standard) do
     {:ok, :standard}
@@ -124,6 +139,7 @@ defmodule Peep.Options do
     {:error, "expected :formatter be either :standard or :datadog, got #{inspect(term)}"}
   end
 
+  @doc false
   def distribution_bucket_variability(f) when is_float(f) and f >= 0.01 and f <= 1.0 do
     {:ok, f}
   end

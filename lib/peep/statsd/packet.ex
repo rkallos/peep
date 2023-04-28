@@ -1,4 +1,5 @@
 defmodule Peep.Statsd.Packet do
+  @moduledoc false
   alias __MODULE__
   require Logger
 

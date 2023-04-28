@@ -1,4 +1,13 @@
 defmodule Peep.Prometheus do
+  @moduledoc """
+  Prometheus exporter module.
+
+  If your application handles calls to "GET /metrics", your handler can call:
+
+      Peep.get_all_metrics(:my_peep) // Replace with your Peep reporter name
+      |> Peep.Prometheus.export()
+  """
+
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum}
 
   def export(metrics) do

@@ -1,4 +1,5 @@
 defmodule Peep.Statsd do
+  @moduledoc false
   require Logger
 
   alias Peep.Statsd.{Cache, Packet}

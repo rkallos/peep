@@ -1,4 +1,5 @@
 defmodule Peep.Statsd.Cache do
+  @moduledoc false
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum}
 
   defstruct kv: %{}
