@@ -5,8 +5,10 @@ defmodule StatsdCacheTest do
   alias Peep.Statsd.Cache
   alias Telemetry.Metrics
 
+  alias Peep.Support.StorageCounter
+
   test "a counter with no increments is omitted from delta" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     counter = Metrics.counter("cache.test.counter")
 
@@ -27,7 +29,7 @@ defmodule StatsdCacheTest do
   end
 
   test "a distribution with no samples is omitted from delta" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     dist = Metrics.distribution("cache.test.dist")
 
@@ -52,7 +54,7 @@ defmodule StatsdCacheTest do
   end
 
   test "a last_value with no changes is included in deltas" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     last_value = Metrics.last_value("cache.test.gauge")
 

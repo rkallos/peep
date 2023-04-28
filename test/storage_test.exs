@@ -4,8 +4,10 @@ defmodule StorageTest do
   alias Peep.Storage
   alias Telemetry.Metrics
 
+  alias Peep.Support.StorageCounter
+
   test "a counter can be stored and retrieved" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     counter = Metrics.counter("storage.test.counter")
 
@@ -22,7 +24,7 @@ defmodule StorageTest do
   end
 
   test "a last_value can be stored and retrieved" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     last_value = Metrics.last_value("storage.test.gauge")
 
@@ -39,7 +41,7 @@ defmodule StorageTest do
   end
 
   test "a distribution can be stored and retrieved" do
-    tid = Storage.new(:distribution_storage_test)
+    tid = Storage.new(StorageCounter.fresh_id())
 
     dist = Metrics.distribution("storage.test.distribution")
 

@@ -4,8 +4,10 @@ defmodule StatsdTest do
   alias Peep.{Statsd, Storage}
   alias Telemetry.Metrics
 
+  alias Peep.Support.StorageCounter
+
   test "a counter can be formatted" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     counter = Metrics.counter("storage.test.counter")
 
@@ -22,7 +24,7 @@ defmodule StatsdTest do
   end
 
   test "a last_value can be formatted" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     last_value = Metrics.last_value("storage.test.gauge")
 
@@ -39,7 +41,7 @@ defmodule StatsdTest do
   end
 
   test "a distribution can be formatted (standard)" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     dist = Metrics.distribution("storage.test.dist")
 
@@ -101,7 +103,7 @@ defmodule StatsdTest do
   end
 
   test "a distribution can be formatted (datadog)" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     dist = Metrics.distribution("storage.test.dist")
 
@@ -162,7 +164,7 @@ defmodule StatsdTest do
   end
 
   test "metrics are batched according to mtu option" do
-    tid = Storage.new(elem(__ENV__.function, 0))
+    tid = Storage.new(StorageCounter.fresh_id())
 
     for i <- 1..10 do
       counter = Metrics.counter("storage.test.counter.#{i}")
