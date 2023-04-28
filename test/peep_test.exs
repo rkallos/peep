@@ -71,4 +71,22 @@ defmodule PeepTest do
     assert Storage.get_metric(name, last_value, tags) == 10
     assert Storage.get_metric(name, distribution, tags).sum == 15
   end
+
+  test "Peep process name can be used with Peep.Storage" do
+    name = :"#{__MODULE__}_storage"
+
+    options = [
+      name: name,
+      metrics: [
+        Metrics.counter("another.peep.counter", event_name: [:another, :counter]),
+        Metrics.sum("another.peep.sum", event_name: [:another, :sum], measurement: :count)
+      ]
+    ]
+
+    {:ok, _pid} = Peep.start_link(options)
+
+    :telemetry.execute([:another, :counter], %{})
+    :telemetry.execute([:another, :sum], %{count: 10})
+    assert %{} = Peep.Storage.get_all_metrics(name)
+  end
 end
