@@ -3,12 +3,13 @@ defmodule Peep.EventHandler do
   require Logger
 
   alias Peep.Storage
-  alias Telemetry.Metrics.Counter
+  alias Telemetry.Metrics.{Counter, Summary}
 
   def attach(metrics, tid, global_tags) do
     metrics_by_event = Enum.group_by(metrics, & &1.event_name)
 
     for {event_name, metrics} <- metrics_by_event do
+      filtered_metrics = Enum.filter(metrics, &allow_metric?/1)
       handler_id = handler_id(event_name, tid)
 
       :ok =
@@ -18,7 +19,7 @@ defmodule Peep.EventHandler do
           &__MODULE__.handle_event/4,
           %{
             tid: tid,
-            metrics: metrics,
+            metrics: filtered_metrics,
             global_tags: global_tags
           }
         )
@@ -71,5 +72,14 @@ defmodule Peep.EventHandler do
       key ->
         measurements[key] || 1
     end
+  end
+
+  defp allow_metric?(%Summary{} = metric) do
+    Logger.warn("The summary metric type is unsupported. Dropping #{inspect(metric.name)}")
+    false
+  end
+
+  defp allow_metric?(_) do
+    true
   end
 end

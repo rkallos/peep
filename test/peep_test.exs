@@ -1,5 +1,7 @@
 defmodule PeepTest do
   use ExUnit.Case
+  import ExUnit.CaptureLog
+
   doctest Peep
 
   alias Peep.Storage
@@ -87,6 +89,29 @@ defmodule PeepTest do
 
     :telemetry.execute([:another, :counter], %{})
     :telemetry.execute([:another, :sum], %{count: 10})
-    assert %{} = Peep.Storage.get_all_metrics(name)
+    assert %{} = Peep.get_all_metrics(name)
+  end
+
+  test "Summary metrics are dropped" do
+    name = :"#{__MODULE__}_unsupported"
+
+    options = [
+      name: name,
+      metrics: [
+        Metrics.summary("peep.summary"),
+        Metrics.summary("another.peep.summary")
+      ]
+    ]
+
+    logs =
+      capture_log(fn ->
+        {:ok, _pid} = Peep.start_link(options)
+      end)
+
+    assert %{} == Peep.get_all_metrics(name)
+
+    for event_name <- [[:peep, :summary], [:another, :peep, :summary]] do
+      assert String.contains?(logs, "Dropping #{inspect(event_name)}")
+    end
   end
 end
