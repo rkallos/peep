@@ -137,7 +137,7 @@ defmodule Peep.Storage do
   defp bucket_idx_to_upper_bound(idx, gamma) do
     case idx do
       :sum -> :sum
-      _ -> format_bucket_upper_bound(gamma ** idx)
+      _ -> format_bucket_upper_bound(:math.pow(gamma, idx))
     end
   end
 
