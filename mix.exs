@@ -41,14 +41,14 @@ defmodule Peep.MixProject do
       {:telemetry_metrics, "~> 0.6"},
 
       # linting
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.2",
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.3",
        [
          only: [:dev, :test],
          runtime: false
        ]},
       {:inch_ex, "~> 2.0", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.27", runtime: false},
+      {:ex_doc, "~> 0.29", runtime: false},
 
       # testing
       {:nimble_parsec, "~> 1.3", runtime: false}
