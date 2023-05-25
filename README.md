@@ -1,6 +1,6 @@
 # Peep
 
-https://github.com/rkallos/peep/actions/workflows/elixir.yml/badge.svg
+![Elixir CI badge](https://github.com/rkallos/peep/actions/workflows/elixir.yml/badge.svg)
 
 `Telemetry.Metrics` reporter for Prometheus and StatsD (including Datadog).
 
