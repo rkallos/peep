@@ -1,6 +1,9 @@
 # Peep
 
+![Hex version badge](https://img.shields.io/hexpm/v/peep)
+![Hexdocs badge](https://img.shields.io/static/v1?message=hexdocs&label=&color=B1A5EE)
 ![Elixir CI badge](https://github.com/rkallos/peep/actions/workflows/elixir.yml/badge.svg)
+![Hex licence badge](https://img.shields.io/hexpm/l/peep)
 
 `Telemetry.Metrics` reporter for Prometheus and StatsD (including Datadog).
 
