@@ -47,7 +47,7 @@ defmodule Peep.Prometheus do
     has_labels? = length(tags) > 0
 
     buckets_as_floats =
-      Map.delete(buckets, :sum)
+      Map.drop(buckets, [:sum, :infinity])
       |> Enum.map(fn {bucket_string, count} -> {String.to_float(bucket_string), count} end)
       |> Enum.sort()
 
@@ -67,12 +67,13 @@ defmodule Peep.Prometheus do
       end)
 
     sum = Map.get(buckets, :sum, 0)
+    inf = Map.get(buckets, :infinity, 0)
 
     summary =
       [
-        ~s(#{name}_bucket{#{labels}#{label_joiner}le="+Inf"} #{count}),
+        ~s(#{name}_bucket{#{labels}#{label_joiner}le="+Inf"} #{count + inf}),
         ~s(#{name}_sum#{label_prefix}#{labels}#{label_suffix} #{sum}),
-        ~s(#{name}_count#{label_prefix}#{labels}#{label_suffix} #{count})
+        ~s(#{name}_count#{label_prefix}#{labels}#{label_suffix} #{count + inf})
       ]
       |> Enum.intersperse(?\n)
 

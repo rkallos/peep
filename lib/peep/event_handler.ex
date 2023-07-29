@@ -3,7 +3,7 @@ defmodule Peep.EventHandler do
   require Logger
 
   alias Peep.Storage
-  alias Telemetry.Metrics.{Counter, Summary}
+  alias Telemetry.Metrics.{Counter, Summary, Distribution}
 
   def attach(metrics, tid, global_tags) do
     metrics_by_event = Enum.group_by(metrics, & &1.event_name)
@@ -77,6 +77,22 @@ defmodule Peep.EventHandler do
   defp allow_metric?(%Summary{} = metric) do
     Logger.warning("The summary metric type is unsupported. Dropping #{inspect(metric.name)}")
     false
+  end
+
+  defp allow_metric?(%Distribution{reporter_options: opts} = metric) do
+    key = :max_value
+
+    case Keyword.get(opts, key) do
+      n when is_number(n) ->
+        true
+
+      _ ->
+        Logger.warning(
+          "Distributions must have a numeric value assigned to #{inspect(key)} in reporter_options. Dropping #{inspect(metric.name)}"
+        )
+
+        false
+    end
   end
 
   defp allow_metric?(_) do

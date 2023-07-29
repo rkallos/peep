@@ -60,7 +60,7 @@ defmodule StatsdTest do
   test "a distribution can be formatted (standard)" do
     tid = Storage.new(StorageCounter.fresh_id())
 
-    dist = Metrics.distribution("statsd.test.dist")
+    dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
 
     for i <- 1..1000 do
       Storage.insert_metric(tid, dist, i, [])
@@ -122,7 +122,7 @@ defmodule StatsdTest do
   test "a distribution can be formatted (datadog)" do
     tid = Storage.new(StorageCounter.fresh_id())
 
-    dist = Metrics.distribution("statsd.test.dist")
+    dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
 
     for i <- 1..1000 do
       Storage.insert_metric(tid, dist, i, [])

@@ -60,17 +60,22 @@ defmodule StorageTest do
   test "a distribution can be stored and retrieved" do
     tid = Storage.new(StorageCounter.fresh_id())
 
-    dist = Metrics.distribution("storage.test.distribution")
+    dist = Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
 
-    for i <- 0..1000 do
+    for i <- 0..2000 do
       Storage.insert_metric(tid, dist, i, [])
     end
 
     expected = %{
       "1.0" => 2,
+      "1.222222" => 0,
+      "1.493827" => 0,
+      "1.825789" => 0,
+      "2.727413" => 0,
       "2.23152" => 1,
       "3.333505" => 1,
       "4.074283" => 1,
+      "4.97968" => 0,
       "6.086275" => 2,
       "7.438781" => 1,
       "9.091843" => 2,
@@ -97,8 +102,9 @@ defmodule StorageTest do
       "614.9016" => 111,
       "751.5464" => 137,
       "918.556711" => 167,
-      "1122.680424" => 82,
-      :sum => 500_500
+      "1122.680424" => 204,
+      :infinity => 878,
+      :sum => 2_001_000
     }
 
     assert Storage.get_metric(tid, dist, []) == expected
@@ -107,7 +113,7 @@ defmodule StorageTest do
   test "distribution bucket variability" do
     tid = Storage.new(StorageCounter.fresh_id(), 0.25)
 
-    dist = Metrics.distribution("storage.test.distribution")
+    dist = Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
 
     for i <- 0..1000 do
       Storage.insert_metric(tid, dist, i, [])
@@ -115,6 +121,7 @@ defmodule StorageTest do
 
     expected = %{
       "1.0" => 2,
+      "1.666667" => 0,
       "2.777778" => 1,
       "4.62963" => 2,
       "7.716049" => 3,
@@ -128,6 +135,7 @@ defmodule StorageTest do
       "459.393658" => 184,
       "765.656097" => 306,
       "1276.093494" => 235,
+      :infinity => 0,
       :sum => 500_500
     }
 
