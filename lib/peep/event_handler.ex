@@ -75,7 +75,7 @@ defmodule Peep.EventHandler do
   end
 
   defp allow_metric?(%Summary{} = metric) do
-    Logger.warn("The summary metric type is unsupported. Dropping #{inspect(metric.name)}")
+    Logger.warning("The summary metric type is unsupported. Dropping #{inspect(metric.name)}")
     false
   end
 
