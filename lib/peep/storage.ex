@@ -4,7 +4,18 @@ defmodule Peep.Storage do
 
   @spec new(atom, float) :: :ets.tid()
   def new(name, alpha \\ 0.10) do
-    tid = :ets.new(name, [:public, :named_table])
+    opts = [
+      :public,
+      :named_table,
+      # Enabling read_concurrency makes switching between reads and writes
+      # more expensive. The goal is to ruthlessly optimize writes, even at
+      # the cost of read performance.
+      read_concurrency: false,
+      write_concurrency: true,
+      decentralized_counters: true
+    ]
+
+    tid = :ets.new(name, opts)
     gamma = (1 + alpha) / (1 - alpha)
     :ets.insert(name, {:gamma, gamma})
     denominator = :math.log(gamma)
