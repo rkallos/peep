@@ -57,7 +57,7 @@ defmodule Peep.Prometheus do
       if has_labels? do
         {format_labels(tags), "{", ",", "}"}
       else
-        {"", "", "", " "}
+        {"", "", "", ""}
       end
 
     samples =
