@@ -163,6 +163,67 @@ defmodule PrometheusTest do
     assert export(tid) == lines_to_string(expected)
   end
 
+  test "dist formatting pow10" do
+    tid = Storage.new(StorageCounter.fresh_id())
+
+    dist =
+      Metrics.distribution("prometheus.test.distribution",
+        description: "a distribution",
+        reporter_options: [
+          max_value: 1000,
+          peep_bucket_calculator: Peep.Buckets.PowersOfTen
+        ]
+      )
+
+    expected = []
+    assert export(tid) == lines_to_string(expected)
+
+    Storage.insert_metric(tid, dist, 1, glee: :gloo)
+
+    expected = [
+      "# HELP prometheus_test_distribution a distribution",
+      "# TYPE prometheus_test_distribution histogram",
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="10.0"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="100.0"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e3"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e4"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e5"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e6"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e7"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e8"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e9"} 1),
+      ~s(prometheus_test_distribution_bucket{glee="gloo",le="+Inf"} 1),
+      ~s(prometheus_test_distribution_sum{glee="gloo"} 1),
+      ~s(prometheus_test_distribution_count{glee="gloo"} 1)
+    ]
+
+    assert export(tid) == lines_to_string(expected)
+
+    for i <- 2..2000 do
+      Storage.insert_metric(tid, dist, i, glee: :gloo)
+    end
+
+    expected =
+      [
+        "# HELP prometheus_test_distribution a distribution",
+        "# TYPE prometheus_test_distribution histogram",
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="10.0"} 9),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="100.0"} 99),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e3"} 999),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e4"} 2000),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e5"} 2000),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e6"} 2000),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e7"} 2000),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e8"} 2000),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="1.0e9"} 2000),
+        ~s(prometheus_test_distribution_bucket{glee="gloo",le="+Inf"} 2000),
+        ~s(prometheus_test_distribution_sum{glee="gloo"} 2001000),
+        ~s(prometheus_test_distribution_count{glee="gloo"} 2000)
+      ]
+
+    assert export(tid) == lines_to_string(expected)
+  end
+
   defp export(tid) do
     Storage.get_all_metrics(tid)
     |> Prometheus.export()

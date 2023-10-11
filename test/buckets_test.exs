@@ -1,0 +1,72 @@
+defmodule BucketsTest do
+  use ExUnit.Case
+
+  defmodule CustomBuckets do
+    use Peep.Buckets.Custom, buckets: [4, 8, 15, 16, 23, 42]
+  end
+
+  alias Telemetry.Metrics
+
+  test "custom buckets #1" do
+    dist =
+      Metrics.distribution("prometheus.test.distribution",
+        description: "a distribution",
+        reporter_options: [
+          max_value: 1000,
+          peep_bucket_calculator: CustomBuckets
+        ]
+      )
+
+    config = CustomBuckets.config(dist)
+
+    assert config == %{}
+
+    assert CustomBuckets.bucket_for(3, config) == 0
+    assert CustomBuckets.bucket_for(5, config) == 1
+    assert CustomBuckets.bucket_for(14, config) == 2
+    assert CustomBuckets.bucket_for(15, config) == 3
+    assert CustomBuckets.bucket_for(16, config) == 4
+    assert CustomBuckets.bucket_for(22, config) == 4
+    assert CustomBuckets.bucket_for(23, config) == 5
+    assert CustomBuckets.bucket_for(41, config) == 5
+    assert CustomBuckets.bucket_for(42, config) == 6
+    assert CustomBuckets.bucket_for(43, config) == 6
+    assert CustomBuckets.bucket_for(1_000, config) == 6
+
+    assert CustomBuckets.upper_bound(0, config) == "4.0"
+    assert CustomBuckets.upper_bound(1, config) == "8.0"
+    assert CustomBuckets.upper_bound(2, config) == "15.0"
+    assert CustomBuckets.upper_bound(3, config) == "16.0"
+    assert CustomBuckets.upper_bound(4, config) == "23.0"
+    assert CustomBuckets.upper_bound(5, config) == "42.0"
+    assert CustomBuckets.upper_bound(6, config) == "+Inf"
+    assert CustomBuckets.upper_bound(1_000, config) == "+Inf"
+  end
+
+  test "passing a non-number to `use Peep.Buckets.Custom` fails to compile" do
+    ast =
+      quote do
+        defmodule BadBuckets do
+          use Peep.Buckets.Custom, buckets: [1, 2, 3, :four, 5]
+        end
+      end
+
+    assert_raise ArgumentError, fn -> Code.compile_quoted(ast) end
+  end
+
+  test "buckets passed to `use Peep.Buckets.Custom` are deduplicated" do
+    [{module, _binary}] =
+      quote do
+        defmodule DupeBuckets do
+          use Peep.Buckets.Custom, buckets: [1, 1, 1.0, 2, 2.0, 3]
+        end
+      end
+      |> Code.compile_quoted()
+
+    assert 3 = module.number_of_buckets(%{})
+    assert 0 = module.bucket_for(0, %{})
+    assert 1 = module.bucket_for(1, %{})
+    assert 2 = module.bucket_for(2, %{})
+    assert 3 = module.bucket_for(3, %{})
+  end
+end

@@ -91,7 +91,7 @@ defmodule Peep do
 
   @impl true
   def init(options) do
-    tid = Storage.new(options.name, options.distribution_bucket_variability)
+    tid = Storage.new(options.name)
 
     metrics = options.metrics
     handler_ids = EventHandler.attach(metrics, tid, options.global_tags)

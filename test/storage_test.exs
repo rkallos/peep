@@ -111,9 +111,15 @@ defmodule StorageTest do
   end
 
   test "distribution bucket variability" do
-    tid = Storage.new(StorageCounter.fresh_id(), 0.25)
+    tid = Storage.new(StorageCounter.fresh_id())
 
-    dist = Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+    dist =
+      Metrics.distribution("storage.test.distribution",
+        reporter_options: [
+          max_value: 1000,
+          bucket_variability: 0.25
+        ]
+      )
 
     for i <- 0..1000 do
       Storage.insert_metric(tid, dist, i, [])

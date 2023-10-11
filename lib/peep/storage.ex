@@ -3,8 +3,8 @@ defmodule Peep.Storage do
   alias __MODULE__
   alias Telemetry.Metrics
 
-  @spec new(atom, float) :: :ets.tid()
-  def new(name, alpha \\ 0.10) do
+  @spec new(atom) :: :ets.tid()
+  def new(name) do
     opts = [
       :public,
       :named_table,
@@ -16,10 +16,7 @@ defmodule Peep.Storage do
       decentralized_counters: true
     ]
 
-    tid = :ets.new(name, opts)
-    gamma = (1 + alpha) / (1 - alpha)
-    :ets.insert(name, {:gamma, gamma})
-    tid
+    :ets.new(name, opts)
   end
 
   def insert_metric(tid, %Metrics.Counter{} = metric, _value, tags) do
@@ -50,8 +47,7 @@ defmodule Peep.Storage do
           # to write to this key. Thankfully, :ets.insert_new/2 will break ties,
           # and concurrent writers should agree on which :atomics object to
           # increment.
-          num_buckets = Keyword.fetch!(metric.reporter_options, :max_value)
-          new_atomics = Storage.Atomics.new(num_buckets, gamma(tid))
+          new_atomics = Storage.Atomics.new(metric)
 
           case :ets.insert_new(tid, {key, new_atomics}) do
             true ->
@@ -142,10 +138,5 @@ defmodule Peep.Storage do
       |> Map.put_new(tags, Storage.Atomics.values(atomics))
 
     Map.put(acc, metric, inner_map)
-  end
-
-  defp gamma(tid) do
-    [{:gamma, g}] = :ets.lookup(tid, :gamma)
-    g
   end
 end

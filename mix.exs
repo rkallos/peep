@@ -54,7 +54,10 @@ defmodule Peep.MixProject do
       canonical: "http://hexdocs.pm/peep",
       source_url: "https://github.com/rkallos/peep",
       source_ref: "v#{@version}",
-      extras: []
+      extras: [],
+      groups_for_modules: [
+        Bucketing: [~r/Peep.Buckets/]
+      ]
     ]
   end
 
