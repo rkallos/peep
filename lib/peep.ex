@@ -30,15 +30,19 @@ defmodule Peep do
 
   Sampling is a popular approach to reduce the amount of Statsd data flowing out
   of a service, but naive sampling dramatically reduces visibility into the
-  shapes of distributions. `Peep` represents distributions using histograms with
-  a small exponential function. This sacrifices some granularity on individual
-  samples, but one usually doesn't mind too much if a sample value of `95` is
-  rounded to `100`, or if `950` is rounded to `1000`.  These histograms are
-  emitted to statsd using the optional sample rate of `1/$count`.
+  shapes of distributions. `Peep` represents distributions using histograms,
+  using a small exponential function by default. This sacrifices some
+  granularity on individual samples, but one usually doesn't mind too much if a
+  sample value of `95` is rounded to `100`, or if `950` is rounded to `1000`.
+  These histograms are emitted to statsd using the optional sample rate of
+  `1/$count`.
 
-  `Peep` uses counters stored in `:ets` for performance. `Peep` reporter
-  processes are not involved in the handling of any `:telemetry` events, so
-  there's no chance of a single process becoming a bottleneck.
+  `Peep` uses `:atomics` stored in `:ets` for performance. New `:atomics` arrays
+  are created when a metric with a new set of tags is observed, so there is a
+  slight overhead when handling the first telemetry event with a distinct set of
+  tags. `Peep` reporter processes are not involved in the handling of any
+  `:telemetry` events, so there's no chance of a single process becoming a
+  bottleneck.
 
   ### Distributions are aggregated immediately
 
