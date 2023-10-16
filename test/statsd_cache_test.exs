@@ -52,7 +52,7 @@ defmodule StatsdCacheTest do
   test "a distribution with no samples is omitted from delta" do
     tid = Storage.new(StorageCounter.fresh_id())
 
-    dist = Metrics.distribution("cache.test.dist")
+    dist = Metrics.distribution("cache.test.dist", reporter_options: [max_value: 1000])
 
     Storage.insert_metric(tid, dist, 500, [])
     Storage.insert_metric(tid, dist, 500, [])

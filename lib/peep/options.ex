@@ -59,12 +59,6 @@ defmodule Peep.Options do
       doc:
         "Additional tags published with every metric. " <>
           "Global tags are overriden by the tags specified in the metric definition."
-    ],
-    distribution_bucket_variability: [
-      type: {:custom, __MODULE__, :distribution_bucket_variability, []},
-      default: 0.10,
-      doc:
-        "A percentage reflecting roughly half the amount by which bucket boundaries should vary. For example, with a value of 10%, the bucket after 100 would store values roughly in the range of 101..120, meaning the bucket's midpoint is 110. The bucket after that would store values roughly in the range 120..144, with a midpoint of 131. A smaller value trades memory (:ets table size) for precision."
     ]
   ]
 
@@ -137,16 +131,6 @@ defmodule Peep.Options do
 
   def formatter(term) do
     {:error, "expected :formatter be either :standard or :datadog, got #{inspect(term)}"}
-  end
-
-  @doc false
-  def distribution_bucket_variability(f) when is_float(f) and f >= 0.01 and f <= 1.0 do
-    {:ok, f}
-  end
-
-  def distribution_bucket_variability(term) do
-    {:error,
-     "expected :distribution_bucket_variability to be a value in 0%..100%, got #{inspect(term)}"}
   end
 
   defp rename_socket_path(nil) do

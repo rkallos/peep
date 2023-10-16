@@ -1,7 +1,7 @@
 defmodule Peep.MixProject do
   use Mix.Project
 
-  @version "1.0.1"
+  @version "2.0.0"
 
   def project do
     [
@@ -54,7 +54,10 @@ defmodule Peep.MixProject do
       canonical: "http://hexdocs.pm/peep",
       source_url: "https://github.com/rkallos/peep",
       source_ref: "v#{@version}",
-      extras: []
+      extras: [],
+      groups_for_modules: [
+        Bucketing: [~r/Peep.Buckets/]
+      ]
     ]
   end
 

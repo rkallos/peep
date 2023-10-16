@@ -4,7 +4,7 @@ defmodule Peep.Prometheus do
 
   If your application handles calls to "GET /metrics", your handler can call:
 
-      Peep.get_all_metrics(:my_peep) // Replace with your Peep reporter name
+      Peep.get_all_metrics(:my_peep) # Replace with your Peep reporter name
       |> Peep.Prometheus.export()
   """
 
@@ -47,7 +47,7 @@ defmodule Peep.Prometheus do
     has_labels? = length(tags) > 0
 
     buckets_as_floats =
-      Map.delete(buckets, :sum)
+      Map.drop(buckets, [:sum, :infinity])
       |> Enum.map(fn {bucket_string, count} -> {String.to_float(bucket_string), count} end)
       |> Enum.sort()
 
@@ -57,7 +57,7 @@ defmodule Peep.Prometheus do
       if has_labels? do
         {format_labels(tags), "{", ",", "}"}
       else
-        {"", "", "", " "}
+        {"", "", "", ""}
       end
 
     samples =
@@ -67,12 +67,13 @@ defmodule Peep.Prometheus do
       end)
 
     sum = Map.get(buckets, :sum, 0)
+    inf = Map.get(buckets, :infinity, 0)
 
     summary =
       [
-        ~s(#{name}_bucket{#{labels}#{label_joiner}le="+Inf"} #{count}),
+        ~s(#{name}_bucket{#{labels}#{label_joiner}le="+Inf"} #{count + inf}),
         ~s(#{name}_sum#{label_prefix}#{labels}#{label_suffix} #{sum}),
-        ~s(#{name}_count#{label_prefix}#{labels}#{label_suffix} #{count})
+        ~s(#{name}_count#{label_prefix}#{labels}#{label_suffix} #{count + inf})
       ]
       |> Enum.intersperse(?\n)
 

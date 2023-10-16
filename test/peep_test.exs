@@ -52,7 +52,12 @@ defmodule PeepTest do
       Metrics.last_value("peep.gauge", event_name: [:gauge], measurement: :value, tags: tag_keys)
 
     distribution =
-      Metrics.distribution("peep.dist", event_name: [:dist], measurement: :value, tags: tag_keys)
+      Metrics.distribution("peep.dist",
+        event_name: [:dist],
+        measurement: :value,
+        tags: tag_keys,
+        reporter_options: [max_value: 100]
+      )
 
     metrics = [counter, sum, last_value, distribution]
 

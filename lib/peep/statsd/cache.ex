@@ -88,7 +88,7 @@ defmodule Peep.Statsd.Cache do
           formatted_tags = format_tags(tags)
 
           to_add =
-            for {bucket, count} <- buckets, bucket != :sum, into: %{} do
+            for {bucket, count} <- buckets, bucket != :sum, bucket != "+Inf", into: %{} do
               formatted_bucket = to_string(bucket)
               {{:dist, formatted_name, formatted_tags, formatted_bucket}, count}
             end
