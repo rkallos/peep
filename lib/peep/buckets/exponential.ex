@@ -37,7 +37,7 @@ defmodule Peep.Buckets.Exponential do
   end
 
   @impl true
-  def bucket_for(value, _) when value == 0 do
+  def bucket_for(value, _) when value < 1 do
     0
   end
 
