@@ -83,6 +83,9 @@ defmodule Peep.EventHandler do
     key = :max_value
 
     case Keyword.get(opts, key) do
+      nil ->
+        true
+
       n when is_number(n) ->
         true
 
