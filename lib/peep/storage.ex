@@ -20,12 +20,12 @@ defmodule Peep.Storage do
   end
 
   def insert_metric(tid, %Metrics.Counter{} = metric, _value, tags) do
-    key = {metric, tags}
+    key = {metric, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
   end
 
   def insert_metric(tid, %Metrics.Sum{} = metric, value, tags) do
-    key = {metric, tags}
+    key = {metric, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
@@ -68,17 +68,13 @@ defmodule Peep.Storage do
   end
 
   def get_metric(tid, %Metrics.Counter{} = metric, tags) do
-    case :ets.lookup(tid, {metric, tags}) do
-      [{_key, count}] -> count
-      _ -> nil
-    end
+    :ets.match(tid, {{metric, tags, :_}, :"$1"})
+    |> Enum.reduce(0, fn [count], acc -> count + acc end)
   end
 
   def get_metric(tid, %Metrics.Sum{} = metric, tags) do
-    case :ets.lookup(tid, {metric, tags}) do
-      [{_key, count}] -> count
-      _ -> nil
-    end
+    :ets.match(tid, {{metric, tags, :_}, :"$1"})
+    |> Enum.reduce(0, fn [count], acc -> count + acc end)
   end
 
   def get_metric(tid, %Metrics.LastValue{} = metric, tags) do
@@ -99,44 +95,24 @@ defmodule Peep.Storage do
     acc
   end
 
-  defp group_metrics([{:gamma, _} | rest], acc) do
-    group_metrics(rest, acc)
-  end
-
   defp group_metrics([metric | rest], acc) do
     acc2 = group_metric(metric, acc)
     group_metrics(rest, acc2)
   end
 
-  defp group_metric({{%Metrics.Counter{} = metric, tags}, value}, acc) do
-    inner_map =
-      Map.get(acc, metric, %{})
-      |> Map.put_new(tags, value)
-
-    Map.put(acc, metric, inner_map)
+  defp group_metric({{%Metrics.Counter{} = metric, tags, _}, value}, acc) do
+    update_in(acc, [Access.key(metric, %{}), Access.key(tags, 0)], &(&1 + value))
   end
 
-  defp group_metric({{%Metrics.Sum{} = metric, tags}, value}, acc) do
-    inner_map =
-      Map.get(acc, metric, %{})
-      |> Map.put_new(tags, value)
-
-    Map.put(acc, metric, inner_map)
+  defp group_metric({{%Metrics.Sum{} = metric, tags, _}, value}, acc) do
+    update_in(acc, [Access.key(metric, %{}), Access.key(tags, 0)], &(&1 + value))
   end
 
   defp group_metric({{%Metrics.LastValue{} = metric, tags}, value}, acc) do
-    inner_map =
-      Map.get(acc, metric, %{})
-      |> Map.put_new(tags, value)
-
-    Map.put(acc, metric, inner_map)
+    put_in(acc, [Access.key(metric, %{}), Access.key(tags)], value)
   end
 
   defp group_metric({{%Metrics.Distribution{} = metric, tags}, atomics}, acc) do
-    inner_map =
-      Map.get(acc, metric, %{})
-      |> Map.put_new(tags, Storage.Atomics.values(atomics))
-
-    Map.put(acc, metric, inner_map)
+    put_in(acc, [Access.key(metric, %{}), Access.key(tags)], Storage.Atomics.values(atomics))
   end
 end
