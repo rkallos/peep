@@ -95,6 +95,7 @@ defmodule Peep do
 
   @impl true
   def init(options) do
+    Process.flag(:trap_exit, true)
     tid = Storage.new(options.name)
 
     metrics = options.metrics
@@ -144,6 +145,11 @@ defmodule Peep do
 
     set_statsd_timer(statsd_opts[:flush_interval_ms])
     {:noreply, %State{state | statsd_state: new_statsd_state}}
+  end
+
+  @impl true
+  def terminate(:shutdown, %{handler_ids: handler_ids}) do
+    EventHandler.detach(handler_ids)
   end
 
   defp set_statsd_timer(interval) do

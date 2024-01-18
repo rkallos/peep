@@ -119,4 +119,26 @@ defmodule PeepTest do
       assert String.contains?(logs, "Dropping #{inspect(event_name)}")
     end
   end
+
+  test "Handlers are detached on shutdown" do
+    prefix = [:peep, :shutdown_test]
+
+    metric =
+      Metrics.counter(prefix ++ [:counter])
+
+    {:ok, options} =
+      [
+        name: :"#{__MODULE__}_shutdown_test",
+        metrics: [metric]
+      ]
+      |> Peep.Options.validate()
+
+    {:ok, pid} = GenServer.start(Peep, options, name: options.name)
+
+    assert length(:telemetry.list_handlers(prefix)) == 1
+
+    GenServer.stop(pid, :shutdown)
+
+    assert [] == :telemetry.list_handlers(prefix)
+  end
 end

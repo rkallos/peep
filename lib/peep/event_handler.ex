@@ -28,6 +28,10 @@ defmodule Peep.EventHandler do
     end
   end
 
+  def detach(handler_ids) do
+    Enum.each(handler_ids, fn id -> :telemetry.detach(id) end)
+  end
+
   def handle_event(_event, measurements, metadata, %{
         tid: tid,
         metrics: metrics,
