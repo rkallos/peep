@@ -1,7 +1,7 @@
 defmodule Peep.MixProject do
   use Mix.Project
 
-  @version "2.1.1"
+  @version "2.1.2"
 
   def project do
     [
@@ -37,8 +37,8 @@ defmodule Peep.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nimble_options, "~> 1.0"},
-      {:telemetry_metrics, "~> 0.6"},
+      {:nimble_options, ">= 1.0.0"},
+      {:telemetry_metrics, ">= 0.6.0"},
       # testing, docs, & linting
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false},
