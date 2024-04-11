@@ -87,12 +87,12 @@ defmodule Peep.Prometheus do
 
     samples =
       Enum.map_intersperse(series, ?\n, fn {labels, value} ->
-        has_lables? = length(labels) > 0
+        has_labels? = length(labels) > 0
 
-        if has_lables? do
-          "#{name}{#{format_labels(labels)}} #{value}"
+        if has_labels? do
+          "#{name}{#{format_labels(labels)}} #{format_value(value)}"
         else
-          "#{name} #{value}"
+          "#{name} #{format_value(value)}"
         end
       end)
 
@@ -112,6 +112,14 @@ defmodule Peep.Prometheus do
     |> String.replace(~r/[^a-zA-Z0-9_]/, "")
     |> String.replace(~r/^[^a-zA-Z]+/, "")
   end
+
+  defp format_value(true), do: "1"
+  defp format_value(false), do: "0"
+  defp format_value(nil), do: "0"
+  defp format_value(n) when is_integer(n), do: :erlang.integer_to_binary(n)
+  defp format_value(f) when is_float(f), do: :erlang.float_to_binary(f, [:compact])
+
+  defp escape(nil), do: "nil"
 
   defp escape(value) do
     value

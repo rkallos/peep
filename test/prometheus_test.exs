@@ -224,6 +224,31 @@ defmodule PrometheusTest do
     assert export(tid) == lines_to_string(expected)
   end
 
+  test "non-number values" do
+    tid = Storage.new(StorageCounter.fresh_id())
+
+    last_value =
+      Metrics.last_value(
+        "prometheus.test.gauge",
+        description: "a last_value",
+        tags: [:from]
+      )
+
+    Storage.insert_metric(tid, last_value, true, from: true)
+    Storage.insert_metric(tid, last_value, false, from: false)
+    Storage.insert_metric(tid, last_value, nil, from: nil)
+
+    expected = [
+      "# HELP prometheus_test_gauge a last_value",
+      "# TYPE prometheus_test_gauge gauge",
+      ~s(prometheus_test_gauge{from="false"} 0),
+      ~s(prometheus_test_gauge{from="nil"} 0),
+      ~s(prometheus_test_gauge{from="true"} 1)
+    ]
+
+    assert export(tid) == lines_to_string(expected)
+  end
+
   defp export(tid) do
     Storage.get_all_metrics(tid)
     |> Prometheus.export()
