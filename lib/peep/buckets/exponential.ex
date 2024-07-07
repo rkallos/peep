@@ -25,9 +25,15 @@ defmodule Peep.Buckets.Exponential do
     bucket_variability =
       Keyword.get(opts, :bucket_variability, @default_bucket_variability)
 
+    gamma = (1 + bucket_variability) / (1 - bucket_variability)
+    log_gamma = :math.log(gamma)
+    max_bucket = bucket_for(max_value, %{log_gamma: log_gamma})
+
     %{
       max_value: max_value,
-      gamma: (1 + bucket_variability) / (1 - bucket_variability)
+      max_bucket: max_bucket,
+      gamma: gamma,
+      log_gamma: log_gamma
     }
   end
 
@@ -37,12 +43,16 @@ defmodule Peep.Buckets.Exponential do
   end
 
   @impl true
-  def bucket_for(value, _) when value < 1 do
+  def bucket_for(value, _) when is_number(value) and value < 1 do
     0
   end
 
-  def bucket_for(value, %{gamma: gamma}) do
-    max(ceil(:math.log(value) / :math.log(gamma)), 0)
+  def bucket_for(value, %{max_value: max_value, max_bucket: max_bucket}) when value > max_value do
+    max_bucket
+  end
+
+  def bucket_for(value, %{log_gamma: log_gamma}) when is_number(value) do
+    max(ceil(:math.log(value) / log_gamma)), 0)
   end
 
   @impl true
