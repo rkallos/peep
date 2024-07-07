@@ -44,7 +44,7 @@ defmodule Peep.Prometheus do
   end
 
   defp format_distribution(name, tags, buckets) do
-    has_labels? = length(tags) > 0
+    has_labels? = not Enum.empty?(tags)
 
     buckets_as_floats =
       Map.drop(buckets, [:sum, :infinity])
@@ -87,7 +87,7 @@ defmodule Peep.Prometheus do
 
     samples =
       Enum.map_intersperse(series, ?\n, fn {labels, value} ->
-        has_labels? = length(labels) > 0
+        has_labels? = not Enum.empty?(labels)
 
         if has_labels? do
           "#{name}{#{format_labels(labels)}} #{format_value(value)}"

@@ -10,7 +10,7 @@ defmodule PrometheusTest do
     tid = Storage.new(StorageCounter.fresh_id())
     counter = Metrics.counter("prometheus.test.counter", description: "a counter")
 
-    Storage.insert_metric(tid, counter, 1, foo: :bar, baz: "quux")
+    Storage.insert_metric(tid, counter, 1, %{foo: :bar, baz: "quux"})
 
     expected = [
       "# HELP prometheus_test_counter a counter",
@@ -25,8 +25,8 @@ defmodule PrometheusTest do
     tid = Storage.new(StorageCounter.fresh_id())
     sum = Metrics.sum("prometheus.test.sum", description: "a sum")
 
-    Storage.insert_metric(tid, sum, 5, foo: :bar, baz: "quux")
-    Storage.insert_metric(tid, sum, 3, foo: :bar, baz: "quux")
+    Storage.insert_metric(tid, sum, 5, %{foo: :bar, baz: "quux"})
+    Storage.insert_metric(tid, sum, 3, %{foo: :bar, baz: "quux"})
 
     expected = [
       "# HELP prometheus_test_sum a sum",
@@ -41,7 +41,7 @@ defmodule PrometheusTest do
     tid = Storage.new(StorageCounter.fresh_id())
     last_value = Metrics.last_value("prometheus.test.gauge", description: "a last_value")
 
-    Storage.insert_metric(tid, last_value, 5, blee: :bloo, flee: "floo")
+    Storage.insert_metric(tid, last_value, 5, %{blee: :bloo, flee: "floo"})
 
     expected = [
       "# HELP prometheus_test_gauge a last_value",
@@ -64,7 +64,7 @@ defmodule PrometheusTest do
     expected = []
     assert export(tid) == lines_to_string(expected)
 
-    Storage.insert_metric(tid, dist, 1, glee: :gloo)
+    Storage.insert_metric(tid, dist, 1, %{glee: :gloo})
 
     expected = [
       "# HELP prometheus_test_distribution a distribution",
@@ -113,7 +113,7 @@ defmodule PrometheusTest do
     assert export(tid) == lines_to_string(expected)
 
     for i <- 2..2000 do
-      Storage.insert_metric(tid, dist, i, glee: :gloo)
+      Storage.insert_metric(tid, dist, i, %{glee: :gloo})
     end
 
     expected = [
@@ -178,7 +178,7 @@ defmodule PrometheusTest do
     expected = []
     assert export(tid) == lines_to_string(expected)
 
-    Storage.insert_metric(tid, dist, 1, glee: :gloo)
+    Storage.insert_metric(tid, dist, 1, %{glee: :gloo})
 
     expected = [
       "# HELP prometheus_test_distribution a distribution",
@@ -200,7 +200,7 @@ defmodule PrometheusTest do
     assert export(tid) == lines_to_string(expected)
 
     for i <- 2..2000 do
-      Storage.insert_metric(tid, dist, i, glee: :gloo)
+      Storage.insert_metric(tid, dist, i, %{glee: :gloo})
     end
 
     expected =
@@ -234,9 +234,9 @@ defmodule PrometheusTest do
         tags: [:from]
       )
 
-    Storage.insert_metric(tid, last_value, true, from: true)
-    Storage.insert_metric(tid, last_value, false, from: false)
-    Storage.insert_metric(tid, last_value, nil, from: nil)
+    Storage.insert_metric(tid, last_value, true, %{from: true})
+    Storage.insert_metric(tid, last_value, false, %{from: false})
+    Storage.insert_metric(tid, last_value, nil, %{from: nil})
 
     expected = [
       "# HELP prometheus_test_gauge a last_value",

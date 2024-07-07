@@ -12,7 +12,7 @@ defmodule StatsdCacheTest do
 
     counter = Metrics.counter("cache.test.counter")
 
-    Storage.insert_metric(tid, counter, 1, [])
+    Storage.insert_metric(tid, counter, 1, %{})
 
     {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(tid), Cache.new([]))
 
@@ -22,7 +22,7 @@ defmodule StatsdCacheTest do
 
     assert Map.values(delta_two) == []
 
-    Storage.insert_metric(tid, counter, 1, [])
+    Storage.insert_metric(tid, counter, 1, %{})
     {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(tid), cache_two)
 
     assert Map.values(delta_three) == [1]
@@ -33,7 +33,7 @@ defmodule StatsdCacheTest do
 
     sum = Metrics.sum("cache.test.counter")
 
-    Storage.insert_metric(tid, sum, 10, [])
+    Storage.insert_metric(tid, sum, 10, %{})
 
     {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(tid), Cache.new([]))
 
@@ -43,7 +43,7 @@ defmodule StatsdCacheTest do
 
     assert Map.values(delta_two) == []
 
-    Storage.insert_metric(tid, sum, 10, [])
+    Storage.insert_metric(tid, sum, 10, %{})
     {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(tid), cache_two)
 
     assert Map.values(delta_three) == [10]
@@ -54,9 +54,9 @@ defmodule StatsdCacheTest do
 
     dist = Metrics.distribution("cache.test.dist", reporter_options: [max_value: 1000])
 
-    Storage.insert_metric(tid, dist, 500, [])
-    Storage.insert_metric(tid, dist, 500, [])
-    Storage.insert_metric(tid, dist, 500, [])
+    Storage.insert_metric(tid, dist, 500, %{})
+    Storage.insert_metric(tid, dist, 500, %{})
+    Storage.insert_metric(tid, dist, 500, %{})
 
     {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(tid), Cache.new([]))
 
@@ -66,9 +66,9 @@ defmodule StatsdCacheTest do
 
     assert Map.values(delta_two) == []
 
-    Storage.insert_metric(tid, dist, 500, [])
-    Storage.insert_metric(tid, dist, 500, [])
-    Storage.insert_metric(tid, dist, 1000, [])
+    Storage.insert_metric(tid, dist, 500, %{})
+    Storage.insert_metric(tid, dist, 500, %{})
+    Storage.insert_metric(tid, dist, 1000, %{})
     {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(tid), cache_two)
 
     assert Map.values(delta_three) |> Enum.sort() == [1, 2]
@@ -79,7 +79,7 @@ defmodule StatsdCacheTest do
 
     last_value = Metrics.last_value("cache.test.gauge")
 
-    Storage.insert_metric(tid, last_value, 10, [])
+    Storage.insert_metric(tid, last_value, 10, %{})
 
     {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(tid), Cache.new([]))
 

@@ -12,15 +12,15 @@ defmodule StorageTest do
     counter = Metrics.counter("storage.test.counter")
 
     for i <- 1..10 do
-      Storage.insert_metric(tid, counter, 1, [])
+      Storage.insert_metric(tid, counter, 1, %{})
 
       if rem(i, 2) == 0 do
-        Storage.insert_metric(tid, counter, 1, even: true)
+        Storage.insert_metric(tid, counter, 1, %{even: true})
       end
     end
 
-    assert Storage.get_metric(tid, counter, []) == 10
-    assert Storage.get_metric(tid, counter, even: true) == 5
+    assert Storage.get_metric(tid, counter, %{}) == 10
+    assert Storage.get_metric(tid, counter, %{even: true}) == 5
   end
 
   test "a sum can be stored and retrieved" do
@@ -29,10 +29,10 @@ defmodule StorageTest do
     sum = Metrics.sum("storage.test.sum")
 
     for i <- 1..10 do
-      Storage.insert_metric(tid, sum, 2, [])
+      Storage.insert_metric(tid, sum, 2, %{})
 
       if rem(i, 2) == 0 do
-        Storage.insert_metric(tid, sum, 3, even: true)
+        Storage.insert_metric(tid, sum, 3, %{even: true})
       end
     end
 
@@ -46,10 +46,10 @@ defmodule StorageTest do
     last_value = Metrics.last_value("storage.test.gauge")
 
     for i <- 1..10 do
-      Storage.insert_metric(tid, last_value, i, [])
+      Storage.insert_metric(tid, last_value, i, %{})
 
       if rem(i, 2) == 1 do
-        Storage.insert_metric(tid, last_value, i, odd: true)
+        Storage.insert_metric(tid, last_value, i, %{odd: true})
       end
     end
 
@@ -63,7 +63,7 @@ defmodule StorageTest do
     dist = Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
 
     for i <- 0..2000 do
-      Storage.insert_metric(tid, dist, i, [])
+      Storage.insert_metric(tid, dist, i, %{})
     end
 
     expected = %{
@@ -122,7 +122,7 @@ defmodule StorageTest do
       )
 
     for i <- 0..1000 do
-      Storage.insert_metric(tid, dist, i, [])
+      Storage.insert_metric(tid, dist, i, %{})
     end
 
     expected = %{
@@ -160,7 +160,7 @@ defmodule StorageTest do
       )
 
     for i <- -500..500 do
-      Storage.insert_metric(tid, dist, i, [])
+      Storage.insert_metric(tid, dist, i, %{})
     end
 
     expected = %{
