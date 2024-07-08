@@ -12,10 +12,10 @@ defmodule StatsdTest do
     counter = Metrics.counter("statsd.test.counter")
 
     for i <- 1..10 do
-      Storage.insert_metric(tid, counter, 1, [])
+      Storage.insert_metric(tid, counter, 1, %{})
 
       if rem(i, 2) == 0 do
-        Storage.insert_metric(tid, counter, 1, even: true)
+        Storage.insert_metric(tid, counter, 1, %{even: true})
       end
     end
 
@@ -29,10 +29,10 @@ defmodule StatsdTest do
     sum = Metrics.sum("statsd.test.sum")
 
     for i <- 1..10 do
-      Storage.insert_metric(tid, sum, 1, [])
+      Storage.insert_metric(tid, sum, 1, %{})
 
       if rem(i, 2) == 0 do
-        Storage.insert_metric(tid, sum, 1, even: true)
+        Storage.insert_metric(tid, sum, 1, %{even: true})
       end
     end
 
@@ -46,10 +46,10 @@ defmodule StatsdTest do
     last_value = Metrics.last_value("statsd.test.gauge")
 
     for i <- 1..10 do
-      Storage.insert_metric(tid, last_value, i, [])
+      Storage.insert_metric(tid, last_value, i, %{})
 
       if rem(i, 2) == 1 do
-        Storage.insert_metric(tid, last_value, i, odd: true)
+        Storage.insert_metric(tid, last_value, i, %{odd: true})
       end
     end
 
@@ -63,10 +63,10 @@ defmodule StatsdTest do
     dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
 
     for i <- 1..1000 do
-      Storage.insert_metric(tid, dist, i, [])
+      Storage.insert_metric(tid, dist, i, %{})
 
       if rem(i, 100) == 0 do
-        Storage.insert_metric(tid, dist, i, foo: :bar)
+        Storage.insert_metric(tid, dist, i, %{foo: :bar})
       end
     end
 
@@ -125,10 +125,10 @@ defmodule StatsdTest do
     dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
 
     for i <- 1..1000 do
-      Storage.insert_metric(tid, dist, i, [])
+      Storage.insert_metric(tid, dist, i, %{})
 
       if rem(i, 100) == 0 do
-        Storage.insert_metric(tid, dist, i, foo: :bar)
+        Storage.insert_metric(tid, dist, i, %{foo: :bar})
       end
     end
 
@@ -188,8 +188,8 @@ defmodule StatsdTest do
       last_value = Metrics.last_value("statsd.test.gauge.#{i}")
 
       for j <- 1..10 do
-        Storage.insert_metric(tid, sum, j, [])
-        Storage.insert_metric(tid, last_value, j, [])
+        Storage.insert_metric(tid, sum, j, %{})
+        Storage.insert_metric(tid, last_value, j, %{})
       end
     end
 

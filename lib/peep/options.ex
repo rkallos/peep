@@ -54,8 +54,8 @@ defmodule Peep.Options do
           NimbleOptions.docs(@statsd_opts_schema, nest_level: 1)
     ],
     global_tags: [
-      type: :keyword_list,
-      default: [],
+      type: :map,
+      default: %{},
       doc:
         "Additional tags published with every metric. " <>
           "Global tags are overriden by the tags specified in the metric definition."

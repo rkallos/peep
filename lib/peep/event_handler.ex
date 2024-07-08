@@ -41,10 +41,9 @@ defmodule Peep.EventHandler do
       if value = keep?(metric, metadata) && fetch_measurement(metric, measurements, metadata) do
         tag_values =
           global_tags
-          |> Map.new()
           |> Map.merge(metric.tag_values.(metadata))
 
-        tags = Enum.map(metric.tags, &{&1, Map.get(tag_values, &1, "")})
+        tags = Map.new(metric.tags, &{&1, Map.get(tag_values, &1, "")})
 
         Storage.insert_metric(tid, metric, value, tags)
       end

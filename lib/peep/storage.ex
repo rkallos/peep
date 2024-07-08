@@ -19,22 +19,22 @@ defmodule Peep.Storage do
     :ets.new(name, opts)
   end
 
-  def insert_metric(tid, %Metrics.Counter{} = metric, _value, tags) do
+  def insert_metric(tid, %Metrics.Counter{} = metric, _value, %{} = tags) do
     key = {metric, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
   end
 
-  def insert_metric(tid, %Metrics.Sum{} = metric, value, tags) do
+  def insert_metric(tid, %Metrics.Sum{} = metric, value, %{} = tags) do
     key = {metric, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
-  def insert_metric(tid, %Metrics.LastValue{} = metric, value, tags) do
+  def insert_metric(tid, %Metrics.LastValue{} = metric, value, %{} = tags) do
     key = {metric, tags}
     :ets.insert(tid, {key, value})
   end
 
-  def insert_metric(tid, %Metrics.Distribution{} = metric, value, tags) do
+  def insert_metric(tid, %Metrics.Distribution{} = metric, value, %{} = tags) do
     key = {metric, tags}
 
     atomics =
@@ -67,14 +67,17 @@ defmodule Peep.Storage do
     |> group_metrics(%{})
   end
 
+  def get_metric(tid, metrics, tags) when is_list(tags),
+    do: get_metric(tid, metrics, Map.new(tags))
+
   def get_metric(tid, %Metrics.Counter{} = metric, tags) do
-    :ets.match(tid, {{metric, tags, :_}, :"$1"})
-    |> Enum.reduce(0, fn [count], acc -> count + acc end)
+    :ets.select(tid, [{{{metric, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
+    |> Enum.reduce(0, fn count, acc -> count + acc end)
   end
 
   def get_metric(tid, %Metrics.Sum{} = metric, tags) do
-    :ets.match(tid, {{metric, tags, :_}, :"$1"})
-    |> Enum.reduce(0, fn [count], acc -> count + acc end)
+    :ets.select(tid, [{{{metric, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
+    |> Enum.reduce(0, fn count, acc -> count + acc end)
   end
 
   def get_metric(tid, %Metrics.LastValue{} = metric, tags) do
