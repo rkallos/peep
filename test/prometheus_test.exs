@@ -1,5 +1,5 @@
 defmodule PrometheusTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias Peep.{Prometheus, Storage}
   alias Telemetry.Metrics
@@ -21,35 +21,80 @@ defmodule PrometheusTest do
     assert export(tid) == lines_to_string(expected)
   end
 
-  test "sum formatting" do
-    tid = Storage.new(StorageCounter.fresh_id())
-    sum = Metrics.sum("prometheus.test.sum", description: "a sum")
+  describe "sum" do
+    test "formatting" do
+      tid = Storage.new(StorageCounter.fresh_id())
+      sum = Metrics.sum("prometheus.test.sum", description: "a sum")
 
-    Storage.insert_metric(tid, sum, 5, %{foo: :bar, baz: "quux"})
-    Storage.insert_metric(tid, sum, 3, %{foo: :bar, baz: "quux"})
+      Storage.insert_metric(tid, sum, 5, %{foo: :bar, baz: "quux"})
+      Storage.insert_metric(tid, sum, 3, %{foo: :bar, baz: "quux"})
 
-    expected = [
-      "# HELP prometheus_test_sum a sum",
-      "# TYPE prometheus_test_sum counter",
-      ~s(prometheus_test_sum{baz="quux",foo="bar"} 8)
-    ]
+      expected = [
+        "# HELP prometheus_test_sum a sum",
+        "# TYPE prometheus_test_sum counter",
+        ~s(prometheus_test_sum{baz="quux",foo="bar"} 8)
+      ]
 
-    assert export(tid) == lines_to_string(expected)
+      assert export(tid) == lines_to_string(expected)
+    end
+
+    test "custom type" do
+      tid = Storage.new(StorageCounter.fresh_id())
+
+      sum =
+        Metrics.sum("prometheus.test.sum",
+          description: "a sum",
+          reporter_options: [prometheus_type: "gauge"]
+        )
+
+      Storage.insert_metric(tid, sum, 5, %{foo: :bar, baz: "quux"})
+      Storage.insert_metric(tid, sum, 3, %{foo: :bar, baz: "quux"})
+
+      expected = [
+        "# HELP prometheus_test_sum a sum",
+        "# TYPE prometheus_test_sum gauge",
+        ~s(prometheus_test_sum{baz="quux",foo="bar"} 8)
+      ]
+
+      assert export(tid) == lines_to_string(expected)
+    end
   end
 
-  test "last_value formatting" do
-    tid = Storage.new(StorageCounter.fresh_id())
-    last_value = Metrics.last_value("prometheus.test.gauge", description: "a last_value")
+  describe "last_value" do
+    test "formatting" do
+      tid = Storage.new(StorageCounter.fresh_id())
+      last_value = Metrics.last_value("prometheus.test.gauge", description: "a last_value")
 
-    Storage.insert_metric(tid, last_value, 5, %{blee: :bloo, flee: "floo"})
+      Storage.insert_metric(tid, last_value, 5, %{blee: :bloo, flee: "floo"})
 
-    expected = [
-      "# HELP prometheus_test_gauge a last_value",
-      "# TYPE prometheus_test_gauge gauge",
-      ~s(prometheus_test_gauge{blee="bloo",flee="floo"} 5)
-    ]
+      expected = [
+        "# HELP prometheus_test_gauge a last_value",
+        "# TYPE prometheus_test_gauge gauge",
+        ~s(prometheus_test_gauge{blee="bloo",flee="floo"} 5)
+      ]
 
-    assert export(tid) == lines_to_string(expected)
+      assert export(tid) == lines_to_string(expected)
+    end
+
+    test "custom type" do
+      tid = Storage.new(StorageCounter.fresh_id())
+
+      last_value =
+        Metrics.last_value("prometheus.test.gauge",
+          description: "a last_value",
+          reporter_options: [prometheus_type: :sum]
+        )
+
+      Storage.insert_metric(tid, last_value, 5, %{blee: :bloo, flee: "floo"})
+
+      expected = [
+        "# HELP prometheus_test_gauge a last_value",
+        "# TYPE prometheus_test_gauge sum",
+        ~s(prometheus_test_gauge{blee="bloo",flee="floo"} 5)
+      ]
+
+      assert export(tid) == lines_to_string(expected)
+    end
   end
 
   test "dist formatting" do
