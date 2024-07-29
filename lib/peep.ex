@@ -59,6 +59,13 @@ defmodule Peep do
   each reporting period, metrics collected by a `Peep` reporter will be
   collected into a minimum number of packets. Users can set the maximum packet
   size in `Peep.Options`.
+
+  ## Supported `:reporter_options`
+
+  - `:prometheus_type` - when using `sum/2` or `last_value/2` you can use this
+    option to define Prometheus' type used by such metric. By default `sum/2`
+    uses `counter` and `last_value/2` uses `gauge`. It can be useful when some
+    values are already precomputed, for example presummed socket stats.
   """
   use GenServer
   require Logger

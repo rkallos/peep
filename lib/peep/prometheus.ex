@@ -22,12 +22,12 @@ defmodule Peep.Prometheus do
     format_standard(metric, "counter")
   end
 
-  defp format({%Sum{}, _series} = metric) do
-    format_standard(metric, "counter")
+  defp format({%Sum{} = spec, _series} = metric) do
+    format_standard(metric, spec.reporter_options[:prometheus_type] || "counter")
   end
 
-  defp format({%LastValue{}, _series} = metric) do
-    format_standard(metric, "gauge")
+  defp format({%LastValue{} = spec, _series} = metric) do
+    format_standard(metric, spec.reporter_options[:prometheus_type] || "gauge")
   end
 
   defp format({%Distribution{} = metric, tagged_series}) do
