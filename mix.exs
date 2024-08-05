@@ -44,7 +44,10 @@ defmodule Peep.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:inch_ex, "~> 2.0", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev], runtime: false},
-      {:nimble_parsec, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:nimble_parsec, "~> 1.4", only: [:dev, :test], runtime: false},
+
+      # Optional dependencies
+      {:plug, "~> 1.16", optional: true}
     ]
   end
 
