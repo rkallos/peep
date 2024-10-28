@@ -73,7 +73,7 @@ defmodule Peep do
 
   defmodule State do
     @moduledoc false
-    defstruct tid: nil,
+    defstruct name: nil,
               interval: nil,
               handler_ids: nil,
               statsd_opts: nil,
@@ -98,15 +98,17 @@ defmodule Peep do
   Fetches all metrics from the worker. Called when preparing Prometheus or
   StatsD data.
   """
-  defdelegate get_all_metrics(name_or_pid), to: Peep.Storage
+  def get_all_metrics(name) do
+    {:ok, tid} = Peep.Persistent.tid(name)
+    Storage.get_all_metrics(tid)
+  end
 
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
-    tid = Storage.new(options.name)
-
+    name = options.name
     metrics = options.metrics
-    handler_ids = EventHandler.attach(metrics, tid, options.global_tags)
+    handler_ids = EventHandler.attach(metrics, name, options.global_tags)
 
     statsd_opts = options.statsd
     statsd_flush_interval = statsd_opts[:flush_interval_ms]
@@ -122,8 +124,12 @@ defmodule Peep do
         nil
       end
 
+    :ok =
+      Peep.Persistent.new(options)
+      |> Peep.Persistent.store()
+
     state = %State{
-      tid: tid,
+      name: name,
       handler_ids: handler_ids,
       statsd_opts: statsd_opts,
       statsd_state: statsd_state
@@ -133,19 +139,16 @@ defmodule Peep do
   end
 
   @impl true
-  def handle_call(:get_all_metrics, _from, %State{tid: tid} = state) do
-    {:reply, Storage.get_all_metrics(tid), state}
-  end
-
-  @impl true
   def handle_info(:statsd_flush, %State{statsd_state: nil} = state) do
     {:noreply, state}
   end
 
   def handle_info(
         :statsd_flush,
-        %State{tid: tid, statsd_state: statsd_state, statsd_opts: statsd_opts} = state
+        %State{statsd_state: statsd_state, statsd_opts: statsd_opts} = state
       ) do
+    {:ok, tid} = tid(state)
+
     new_statsd_state =
       Storage.get_all_metrics(tid)
       |> Statsd.make_and_send_packets(statsd_state)
@@ -158,14 +161,15 @@ defmodule Peep do
     # In particular, OTP can sometimes leak `:inet_reply` messages when a UDS datagram
     # socket blocks, and Peep should not terminate the server and lose state when that
     # happens.
-    # 
+    #
     # https://github.com/rkallos/peep/pull/17
     # https://github.com/erlang/otp/issues/8989
     {:noreply, state}
   end
 
   @impl true
-  def terminate(_reason, %{handler_ids: handler_ids}) do
+  def terminate(_reason, %{name: name, handler_ids: handler_ids}) do
+    Peep.Persistent.erase(name)
     EventHandler.detach(handler_ids)
   end
 
@@ -175,5 +179,9 @@ defmodule Peep do
 
   defp peep_name!(options) do
     Keyword.get(options, :name) || raise(ArgumentError, "a name must be provided")
+  end
+
+  defp tid(%State{name: name}) do
+    Peep.Persistent.tid(name)
   end
 end

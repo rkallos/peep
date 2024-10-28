@@ -5,12 +5,12 @@ defmodule Peep.EventHandler do
   alias Peep.Storage
   alias Telemetry.Metrics.{Counter, Summary, Distribution}
 
-  def attach(metrics, tid, global_tags) do
+  def attach(metrics, name, global_tags) do
     metrics_by_event = Enum.group_by(metrics, & &1.event_name)
 
     for {event_name, metrics} <- metrics_by_event do
       filtered_metrics = Enum.filter(metrics, &allow_metric?/1)
-      handler_id = handler_id(event_name, tid)
+      handler_id = handler_id(event_name, name)
 
       :ok =
         :telemetry.attach(
@@ -18,7 +18,7 @@ defmodule Peep.EventHandler do
           event_name,
           &__MODULE__.handle_event/4,
           %{
-            tid: tid,
+            name: name,
             metrics: filtered_metrics,
             global_tags: global_tags
           }
@@ -33,7 +33,7 @@ defmodule Peep.EventHandler do
   end
 
   def handle_event(_event, measurements, metadata, %{
-        tid: tid,
+        name: name,
         metrics: metrics,
         global_tags: global_tags
       }) do
@@ -45,13 +45,14 @@ defmodule Peep.EventHandler do
 
         tags = Map.new(metric.tags, &{&1, Map.get(tag_values, &1, "")})
 
+        {:ok, tid} = Peep.Persistent.tid(name)
         Storage.insert_metric(tid, metric, value, tags)
       end
     end
   end
 
-  defp handler_id(event_name, tid) do
-    {__MODULE__, tid, event_name}
+  defp handler_id(event_name, peep_name) do
+    {__MODULE__, peep_name, event_name}
   end
 
   defp keep?(%{keep: nil}, _metadata), do: true

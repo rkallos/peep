@@ -59,6 +59,15 @@ defmodule Peep.Options do
       doc:
         "Additional tags published with every metric. " <>
           "Global tags are overriden by the tags specified in the metric definition."
+    ],
+    storage: [
+      type: {:in, [:default, :striped]},
+      default: :default,
+      doc:
+        "Which storage implementation to use. " <>
+          "`:default` uses a single ETS table, with some optimizations for concurrent writing. " <>
+          "`:striped` uses one ETS table per scheduler thread, " <>
+          "which trades memory for less lock contention for concurrent writes."
     ]
   ]
 
@@ -69,6 +78,7 @@ defmodule Peep.Options do
   """
 
   defstruct Keyword.keys(@schema)
+  @type t() :: %__MODULE__{}
 
   @spec docs() :: String.t()
   def docs do
