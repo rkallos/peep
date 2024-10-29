@@ -46,16 +46,14 @@ defmodule Peep.Persistent do
     :ok
   end
 
-  @spec tid(name()) :: {:ok, :ets.tid()} | nil
-  def tid(name) when is_atom(name) do
-    id = :erlang.system_info(:scheduler_id)
-
+  @spec storage(name()) :: {module(), term()} | nil
+  def storage(name) when is_atom(name) do
     case fetch(name) do
       %__MODULE__{storage: {:default, tid}} ->
-        {:ok, tid}
+        {Peep.Storage, tid}
 
-      %__MODULE__{storage: {:striped, %{^id => tid}}} ->
-        {:ok, tid}
+      %__MODULE__{storage: {:striped, tids}} ->
+        {Peep.Storage.Striped, tids}
 
       _ ->
         nil

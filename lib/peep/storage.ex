@@ -18,37 +18,6 @@ defmodule Peep.Storage do
     :ets.new(__MODULE__, opts)
   end
 
-  @spec new(atom) :: :ets.tid()
-  def new(name) do
-    opts = [
-      :public,
-      # Enabling read_concurrency makes switching between reads and writes
-      # more expensive. The goal is to ruthlessly optimize writes, even at
-      # the cost of read performance.
-      read_concurrency: false,
-      write_concurrency: true,
-      decentralized_counters: true
-    ]
-
-    :ets.new(name, opts)
-  end
-
-  @spec new_many(atom()) :: %{pos_integer() => :ets.tid()}
-  def new_many(name) do
-    opts = [
-      :public,
-      # Enabling read_concurrency makes switching between reads and writes
-      # more expensive. The goal is to ruthlessly optimize writes, even at
-      # the cost of read performance.
-      read_concurrency: false,
-      write_concurrency: true,
-      decentralized_counters: true
-    ]
-
-    n_schedulers = :erlang.system_info(:schedulers_online)
-    Map.new(1..n_schedulers, fn i -> {i, :ets.new(name, opts)} end)
-  end
-
   def insert_metric(tid, %Metrics.Counter{} = metric, _value, %{} = tags) do
     key = {metric, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})

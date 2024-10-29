@@ -4,7 +4,6 @@ defmodule PeepTest do
 
   doctest Peep
 
-  alias Peep.Storage
   alias Telemetry.Metrics
 
   test "a worker can be started" do
@@ -73,12 +72,10 @@ defmodule PeepTest do
     :telemetry.execute([:gauge], %{value: 10})
     :telemetry.execute([:dist], %{value: 15})
 
-    {:ok, tid} = Peep.Persistent.tid(name)
-
-    assert Storage.get_metric(tid, counter, tags) == 1
-    assert Storage.get_metric(tid, sum, tags) == 5
-    assert Storage.get_metric(tid, last_value, tags) == 10
-    assert Storage.get_metric(tid, distribution, tags).sum == 15
+    assert Peep.get_metric(name, counter, tags) == 1
+    assert Peep.get_metric(name, sum, tags) == 5
+    assert Peep.get_metric(name, last_value, tags) == 10
+    assert Peep.get_metric(name, distribution, tags).sum == 15
   end
 
   test "Peep process name can be used with Peep.Storage" do

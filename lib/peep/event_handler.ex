@@ -2,7 +2,6 @@ defmodule Peep.EventHandler do
   @moduledoc false
   require Logger
 
-  alias Peep.Storage
   alias Telemetry.Metrics.{Counter, Summary, Distribution}
 
   def attach(metrics, name, global_tags) do
@@ -45,8 +44,7 @@ defmodule Peep.EventHandler do
 
         tags = Map.new(metric.tags, &{&1, Map.get(tag_values, &1, "")})
 
-        {:ok, tid} = Peep.Persistent.tid(name)
-        Storage.insert_metric(tid, metric, value, tags)
+        Peep.insert_metric(name, metric, value, tags)
       end
     end
   end

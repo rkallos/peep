@@ -69,7 +69,7 @@ defmodule Peep do
   """
   use GenServer
   require Logger
-  alias Peep.{EventHandler, Options, Storage, Statsd}
+  alias Peep.{EventHandler, Options, Statsd}
 
   defmodule State do
     @moduledoc false
@@ -94,13 +94,41 @@ defmodule Peep do
     end
   end
 
+  def insert_metric(name, metric, value, tags) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.insert_metric(storage, metric, value, tags)
+
+      _ ->
+        nil
+    end
+  end
+
   @doc """
   Fetches all metrics from the worker. Called when preparing Prometheus or
   StatsD data.
   """
   def get_all_metrics(name) do
-    {:ok, tid} = Peep.Persistent.tid(name)
-    Storage.get_all_metrics(tid)
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.get_all_metrics(storage)
+
+      _ ->
+        nil
+    end
+  end
+
+  @doc """
+  Fetches a single metric from storage. Currently only used in tests.
+  """
+  def get_metric(name, metric, tags) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.get_metric(storage, metric, tags)
+
+      _ ->
+        nil
+    end
   end
 
   @impl true
@@ -145,12 +173,10 @@ defmodule Peep do
 
   def handle_info(
         :statsd_flush,
-        %State{statsd_state: statsd_state, statsd_opts: statsd_opts} = state
+        %State{name: name, statsd_state: statsd_state, statsd_opts: statsd_opts} = state
       ) do
-    {:ok, tid} = tid(state)
-
     new_statsd_state =
-      Storage.get_all_metrics(tid)
+      Peep.get_all_metrics(name)
       |> Statsd.make_and_send_packets(statsd_state)
 
     set_statsd_timer(statsd_opts[:flush_interval_ms])
@@ -179,9 +205,5 @@ defmodule Peep do
 
   defp peep_name!(options) do
     Keyword.get(options, :name) || raise(ArgumentError, "a name must be provided")
-  end
-
-  defp tid(%State{name: name}) do
-    Peep.Persistent.tid(name)
   end
 end

@@ -183,9 +183,25 @@ defmodule Peep.Storage.Striped do
     update_in(acc, path, fn {_, _} = b -> max(a, b) end)
   end
 
+  defp add_metric({{%Metrics.Distribution{} = metric, tags}, atomics}, acc) do
+    path = [
+      Access.key(metric, %{}),
+      Access.key(tags, %{})
+    ]
+
+    values = Storage.Atomics.values(atomics)
+
+    update_in(acc, path, fn m1 -> Map.merge(m1, values, fn _k, v1, v2 -> v1 + v2 end) end)
+  end
+
   defp remove_timestamps_from_last_values(%{last_values: lvs} = metrics) do
     last_value_metrics =
-      Map.new(lvs, fn {key, {_ts, value}} -> {key, value} end)
+      for {metric, tags_to_values} <- lvs,
+          {tags, {_ts, value}} <- tags_to_values,
+          reduce: %{} do
+        acc ->
+          put_in(acc, [Access.key(metric, %{}), Access.key(tags)], value)
+      end
 
     metrics
     |> Map.delete(:last_values)
