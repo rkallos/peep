@@ -155,7 +155,7 @@ defmodule Peep do
   end
 
   @impl true
-  def terminate(:shutdown, %{handler_ids: handler_ids}) do
+  def terminate(_reason, %{handler_ids: handler_ids}) do
     EventHandler.detach(handler_ids)
   end
 
