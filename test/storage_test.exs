@@ -209,5 +209,33 @@ defmodule Storage.Test do
 
       assert unquote(impl).get_metric(tid, dist, []) == expected
     end
+
+    test "#{impl} - storage_size/1" do
+      storage = unquote(impl).new()
+
+      counter = Metrics.counter("storage.test.counter")
+      sum = Metrics.sum("storage.test.sum")
+      last_value = Metrics.last_value("storage.test.gauge")
+
+      dist =
+        Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+
+      metrics = [counter, sum, last_value, dist]
+
+      tags_sets = [
+        %{},
+        %{foo: :bar},
+        %{baz: :quux}
+      ]
+
+      for metric <- metrics, tags <- tags_sets do
+        %{size: size_before, memory: mem_before} = unquote(impl).storage_size(storage)
+        unquote(impl).insert_metric(storage, metric, 5, tags)
+        %{size: size_after, memory: mem_after} = unquote(impl).storage_size(storage)
+
+        assert size_after > size_before
+        assert mem_after > mem_before
+      end
+    end
   end
 end

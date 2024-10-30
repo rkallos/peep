@@ -18,6 +18,13 @@ defmodule Peep.Storage do
     :ets.new(__MODULE__, opts)
   end
 
+  def storage_size(tid) do
+    %{
+      size: :ets.info(tid, :size),
+      memory: :ets.info(tid, :memory) * :erlang.system_info(:wordsize)
+    }
+  end
+
   def insert_metric(tid, %Metrics.Counter{} = metric, _value, %{} = tags) do
     key = {metric, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})

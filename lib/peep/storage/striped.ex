@@ -18,6 +18,16 @@ defmodule Peep.Storage.Striped do
     Map.new(1..n_schedulers, fn i -> {i, :ets.new(__MODULE__, opts)} end)
   end
 
+  def storage_size(tids) do
+    size = Enum.reduce(tids, 0, fn {_, tid}, acc -> acc + :ets.info(tid, :size) end)
+    memory = Enum.reduce(tids, 0, fn {_, tid}, acc -> acc + :ets.info(tid, :memory) end)
+
+    %{
+      size: size,
+      memory: memory * :erlang.system_info(:wordsize)
+    }
+  end
+
   def insert_metric(tids, %Metrics.Counter{} = metric, _value, %{} = tags) do
     tid = get_tid(tids)
     key = {metric, tags}

@@ -105,6 +105,20 @@ defmodule Peep do
   end
 
   @doc """
+  Returns measurements about the size of a running Peep's storage, in number of
+  ETS elements and in bytes of memory.
+  """
+  def storage_size(name) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.storage_size(storage)
+
+      _ ->
+        nil
+    end
+  end
+
+  @doc """
   Fetches all metrics from the worker. Called when preparing Prometheus or
   StatsD data.
   """
