@@ -17,7 +17,7 @@ defmodule Peep.Persistent do
     storage =
       case storage_impl do
         :default ->
-          {:default, Peep.Storage.new()}
+          {:default, Peep.Storage.ETS.new()}
 
         :striped ->
           {:striped, Peep.Storage.Striped.new()}
@@ -50,7 +50,7 @@ defmodule Peep.Persistent do
   def storage(name) when is_atom(name) do
     case fetch(name) do
       %__MODULE__{storage: {:default, tid}} ->
-        {Peep.Storage, tid}
+        {Peep.Storage.ETS, tid}
 
       %__MODULE__{storage: {:striped, tids}} ->
         {Peep.Storage.Striped, tids}

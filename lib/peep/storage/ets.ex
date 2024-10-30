@@ -1,6 +1,6 @@
-defmodule Peep.Storage do
+defmodule Peep.Storage.ETS do
   @moduledoc false
-  alias __MODULE__
+  alias Peep.Storage
   alias Telemetry.Metrics
 
   @spec new() :: :ets.tid()
