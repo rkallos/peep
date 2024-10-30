@@ -154,8 +154,18 @@ defmodule Peep do
     {:noreply, %State{state | statsd_state: new_statsd_state}}
   end
 
+  def handle_info(_msg, state) do
+    # In particular, OTP can sometimes leak `:inet_reply` messages when a UDS datagram
+    # socket blocks, and Peep should not terminate the server and lose state when that
+    # happens.
+    # 
+    # https://github.com/rkallos/peep/pull/17
+    # https://github.com/erlang/otp/issues/8989
+    {:noreply, state}
+  end
+
   @impl true
-  def terminate(:shutdown, %{handler_ids: handler_ids}) do
+  def terminate(_reason, %{handler_ids: handler_ids}) do
     EventHandler.detach(handler_ids)
   end
 
