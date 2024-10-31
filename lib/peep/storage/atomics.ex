@@ -13,7 +13,7 @@ defmodule Peep.Storage.Atomics do
     {bucket_calculator, config} = Peep.Buckets.config(metric)
     num_buckets = bucket_calculator.number_of_buckets(config)
     buckets = :atomics.new(num_buckets, signed: false)
-    sum = :atomics.new(1, signed: false)
+    sum = :atomics.new(1, signed: true)
     above_max = :atomics.new(1, signed: false)
 
     %__MODULE__{

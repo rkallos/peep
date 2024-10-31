@@ -69,11 +69,11 @@ defmodule Peep do
   """
   use GenServer
   require Logger
-  alias Peep.{EventHandler, Options, Storage, Statsd}
+  alias Peep.{EventHandler, Options, Statsd}
 
   defmodule State do
     @moduledoc false
-    defstruct tid: nil,
+    defstruct name: nil,
               interval: nil,
               handler_ids: nil,
               statsd_opts: nil,
@@ -94,19 +94,63 @@ defmodule Peep do
     end
   end
 
+  def insert_metric(name, metric, value, tags) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.insert_metric(storage, metric, value, tags)
+
+      _ ->
+        nil
+    end
+  end
+
+  @doc """
+  Returns measurements about the size of a running Peep's storage, in number of
+  ETS elements and in bytes of memory.
+  """
+  def storage_size(name) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.storage_size(storage)
+
+      _ ->
+        nil
+    end
+  end
+
   @doc """
   Fetches all metrics from the worker. Called when preparing Prometheus or
   StatsD data.
   """
-  defdelegate get_all_metrics(name_or_pid), to: Peep.Storage
+  def get_all_metrics(name) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.get_all_metrics(storage)
+
+      _ ->
+        nil
+    end
+  end
+
+  @doc """
+  Fetches a single metric from storage. Currently only used in tests.
+  """
+  def get_metric(name, metric, tags) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.get_metric(storage, metric, tags)
+
+      _ ->
+        nil
+    end
+  end
 
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
-    tid = Storage.new(options.name)
-
+    name = options.name
     metrics = options.metrics
-    handler_ids = EventHandler.attach(metrics, tid, options.global_tags)
+    handler_ids = EventHandler.attach(metrics, name, options.global_tags)
 
     statsd_opts = options.statsd
     statsd_flush_interval = statsd_opts[:flush_interval_ms]
@@ -122,8 +166,12 @@ defmodule Peep do
         nil
       end
 
+    :ok =
+      Peep.Persistent.new(options)
+      |> Peep.Persistent.store()
+
     state = %State{
-      tid: tid,
+      name: name,
       handler_ids: handler_ids,
       statsd_opts: statsd_opts,
       statsd_state: statsd_state
@@ -133,21 +181,16 @@ defmodule Peep do
   end
 
   @impl true
-  def handle_call(:get_all_metrics, _from, %State{tid: tid} = state) do
-    {:reply, Storage.get_all_metrics(tid), state}
-  end
-
-  @impl true
   def handle_info(:statsd_flush, %State{statsd_state: nil} = state) do
     {:noreply, state}
   end
 
   def handle_info(
         :statsd_flush,
-        %State{tid: tid, statsd_state: statsd_state, statsd_opts: statsd_opts} = state
+        %State{name: name, statsd_state: statsd_state, statsd_opts: statsd_opts} = state
       ) do
     new_statsd_state =
-      Storage.get_all_metrics(tid)
+      Peep.get_all_metrics(name)
       |> Statsd.make_and_send_packets(statsd_state)
 
     set_statsd_timer(statsd_opts[:flush_interval_ms])
@@ -158,14 +201,15 @@ defmodule Peep do
     # In particular, OTP can sometimes leak `:inet_reply` messages when a UDS datagram
     # socket blocks, and Peep should not terminate the server and lose state when that
     # happens.
-    # 
+    #
     # https://github.com/rkallos/peep/pull/17
     # https://github.com/erlang/otp/issues/8989
     {:noreply, state}
   end
 
   @impl true
-  def terminate(_reason, %{handler_ids: handler_ids}) do
+  def terminate(_reason, %{name: name, handler_ids: handler_ids}) do
+    Peep.Persistent.erase(name)
     EventHandler.detach(handler_ids)
   end
 
