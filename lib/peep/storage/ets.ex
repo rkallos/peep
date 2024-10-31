@@ -3,7 +3,10 @@ defmodule Peep.Storage.ETS do
   alias Peep.Storage
   alias Telemetry.Metrics
 
+  @behaviour Peep.Storage
+
   @spec new() :: :ets.tid()
+  @impl true
   def new() do
     opts = [
       :public,
@@ -18,6 +21,7 @@ defmodule Peep.Storage.ETS do
     :ets.new(__MODULE__, opts)
   end
 
+  @impl true
   def storage_size(tid) do
     %{
       size: :ets.info(tid, :size),
@@ -25,6 +29,7 @@ defmodule Peep.Storage.ETS do
     }
   end
 
+  @impl true
   def insert_metric(tid, %Metrics.Counter{} = metric, _value, %{} = tags) do
     key = {metric, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
@@ -68,11 +73,13 @@ defmodule Peep.Storage.ETS do
     Storage.Atomics.insert(atomics, value)
   end
 
+  @impl true
   def get_all_metrics(tid) do
     :ets.tab2list(tid)
     |> group_metrics(%{})
   end
 
+  @impl true
   def get_metric(tid, metrics, tags) when is_list(tags),
     do: get_metric(tid, metrics, Map.new(tags))
 

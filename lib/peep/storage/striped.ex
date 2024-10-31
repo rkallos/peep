@@ -3,9 +3,12 @@ defmodule Peep.Storage.Striped do
   alias Telemetry.Metrics
   alias Peep.Storage
 
+  @behaviour Peep.Storage
+
   @type tids() :: %{pos_integer() => :ets.tid()}
 
   @spec new() :: tids()
+  @impl true
   def new() do
     opts = [
       :public,
@@ -18,6 +21,7 @@ defmodule Peep.Storage.Striped do
     Map.new(1..n_schedulers, fn i -> {i, :ets.new(__MODULE__, opts)} end)
   end
 
+  @impl true
   def storage_size(tids) do
     size = Enum.reduce(tids, 0, fn {_, tid}, acc -> acc + :ets.info(tid, :size) end)
     memory = Enum.reduce(tids, 0, fn {_, tid}, acc -> acc + :ets.info(tid, :memory) end)
@@ -28,6 +32,7 @@ defmodule Peep.Storage.Striped do
     }
   end
 
+  @impl true
   def insert_metric(tids, %Metrics.Counter{} = metric, _value, %{} = tags) do
     tid = get_tid(tids)
     key = {metric, tags}
@@ -82,6 +87,7 @@ defmodule Peep.Storage.Striped do
     tid
   end
 
+  @impl true
   def get_metric(tids, metrics, tags) when is_list(tags),
     do: get_metric(tids, metrics, Map.new(tags))
 
@@ -154,6 +160,7 @@ defmodule Peep.Storage.Striped do
     end
   end
 
+  @impl true
   def get_all_metrics(tids) do
     acc = get_all_metrics(Map.values(tids), %{})
     remove_timestamps_from_last_values(acc)
