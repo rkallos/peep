@@ -66,11 +66,19 @@ defmodule PlugTest do
     end
 
     test "returns 404 for non-metrics paths" do
-      opts = Peep.Plug.init(peep_worker: @peep_worker)
+      opts = Peep.Plug.init(peep_worker: @peep_worker, on_unmatched_path: :halt)
       conn = conn(:get, "/not-metrics")
       response = Peep.Plug.call(conn, opts)
 
       assert response.status == 404
+    end
+
+    test "does not halt for non-metrics paths by default" do
+      opts = Peep.Plug.init(peep_worker: @peep_worker)
+      conn = conn(:get, "/not-metrics")
+      response = Peep.Plug.call(conn, opts)
+
+      refute response.halted
     end
   end
 
