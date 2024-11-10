@@ -30,7 +30,11 @@ defmodule Peep.Plug do
   Similarly, if you are using Bandit, you can use it like so:
 
     ```elixir
-    {Bandit.Plug, scheme: :http, plug: Peep.Plug, options: [port: 9000]}
+    {Bandit, [
+      scheme: :http,
+      plug: {Peep.Plug, peep_worker: :my_app},
+      port: 9000
+    ]}
     ```
   """
 
