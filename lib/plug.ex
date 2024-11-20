@@ -6,6 +6,17 @@ defmodule Peep.Plug do
 
   * `:peep_worker` - The name of the Peep worker to use. This is required.
   * `:path` - The path to expose the metrics on. Defaults to `"/metrics"`.
+  * `:on_unmatched_path` - The intended behavior of this plug when handling a
+    request to a different path. There are two possible values:
+      - `:continue` (default) - This allows for subsequent Plugs in a router to
+        be executed. This option is useful when Peep.Plug is part of a router
+        for a Phoenix application, or a router that matches other paths after
+        Peep.Plug.
+
+      - `:halt` - Responds to requests with 404. This option is useful when
+        Peep.Plug is used for serving metrics on a separate port, which is a
+        practice that is encouraged by other libraries that export Prometheus
+        metrics.
 
   ## Usage
 
@@ -46,7 +57,8 @@ defmodule Peep.Plug do
   def init(opts) do
     %{
       metrics_path: Keyword.get(opts, :path, @default_metrics_path),
-      peep_worker: Keyword.fetch!(opts, :peep_worker)
+      peep_worker: Keyword.fetch!(opts, :peep_worker),
+      on_unmatched_path: Keyword.get(opts, :on_unmatched_path, :continue)
     }
   end
 
@@ -80,7 +92,11 @@ defmodule Peep.Plug do
     |> halt()
   end
 
-  def call(%Conn{} = conn, _opts) do
+  def call(%Conn{} = conn, %{on_unmatched_path: :continue}) do
+    conn
+  end
+
+  def call(%Conn{} = conn, %{on_unmatched_path: :halt}) do
     conn
     |> put_resp_content_type("text/plain")
     |> send_resp(404, "Not Found")
