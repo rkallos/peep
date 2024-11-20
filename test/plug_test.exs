@@ -82,6 +82,35 @@ defmodule PlugTest do
     end
   end
 
+  describe "servers" do
+    test "Bandit" do
+      name = :bandit_peep
+      metrics = [last_value("vm.memory.total", unit: :byte)]
+      _peep = start_supervised!({Peep, name: name, metrics: metrics})
+      plug = {Peep.Plug, peep_worker: name}
+      port = 9001
+
+      {:ok, _pid} = start_supervised({Bandit, plug: plug, port: port})
+
+      assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _, _}} =
+               :httpc.request("http://localhost:#{port}/metrics")
+    end
+
+    test "Plug.Cowboy" do
+      name = :cowboy_peep
+      metrics = [last_value("vm.memory.total", unit: :byte)]
+      _peep = start_supervised!({Peep, name: name, metrics: metrics})
+      plug = {Peep.Plug, peep_worker: name}
+      port = 9002
+
+      {:ok, _pid} =
+        start_supervised({Plug.Cowboy, scheme: :http, plug: plug, options: [port: port]})
+
+      assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _, _}} =
+               :httpc.request("http://localhost:#{port}/metrics")
+    end
+  end
+
   def setup_peep_worker(context) do
     start_supervised!(
       {Peep, name: @peep_worker, metrics: [last_value("vm.memory.total", unit: :byte)]},
