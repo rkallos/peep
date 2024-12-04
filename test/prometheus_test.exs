@@ -88,6 +88,29 @@ defmodule PrometheusTest do
     end
 
     describe "#{impl} - last_value" do
+      test "formatting with infinity" do
+        name = StorageCounter.fresh_id()
+        last_value = Metrics.last_value("prometheus.test.gauge", description: "a last_value")
+
+        opts = [
+          name: name,
+          metrics: [last_value],
+          storage: unquote(impl)
+        ]
+
+        {:ok, _pid} = Peep.start_link(opts)
+
+        Peep.insert_metric(name, last_value, :infinity, %{blee: :bloo, flee: "floo"})
+
+        expected = [
+          "# HELP prometheus_test_gauge a last_value",
+          "# TYPE prometheus_test_gauge gauge",
+          ~s(prometheus_test_gauge{blee="bloo",flee="floo"} +Inf)
+        ]
+
+        assert export(name) == lines_to_string(expected)
+      end
+
       test "formatting" do
         name = StorageCounter.fresh_id()
         last_value = Metrics.last_value("prometheus.test.gauge", description: "a last_value")
