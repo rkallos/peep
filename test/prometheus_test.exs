@@ -374,8 +374,7 @@ defmodule PrometheusTest do
 
   defp lines_to_string(lines) do
     lines
-    |> Enum.intersperse(?\n)
-    |> then(&[&1, ?\n])
+    |> Enum.map(&[&1, ?\n])
     |> IO.iodata_to_binary()
   end
 end

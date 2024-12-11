@@ -11,11 +11,7 @@ defmodule Peep.Prometheus do
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum}
 
   def export(metrics) do
-    metrics
-    |> Enum.map(&format/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.intersperse(?\n)
-    |> then(fn io -> [io, ?\n] end)
+    Enum.map(metrics, &format/1)
   end
 
   defp format({%Counter{}, _series} = metric) do
@@ -32,15 +28,15 @@ defmodule Peep.Prometheus do
 
   defp format({%Distribution{} = metric, tagged_series}) do
     name = format_name(metric.name)
-    help = "# HELP #{name} #{escape_help(metric.description)}"
-    type = "# TYPE #{name} histogram"
+    help = ["# HELP ", name, " ", escape_help(metric.description)]
+    type = ["# TYPE ", name, " histogram"]
 
     distributions =
-      Enum.map_intersperse(tagged_series, ?\n, fn {tags, buckets} ->
+      Enum.map(tagged_series, fn {tags, buckets} ->
         format_distribution(name, tags, buckets)
       end)
 
-    Enum.intersperse([help, type, distributions], ?\n)
+    [help, ?\n, type, ?\n, distributions]
   end
 
   defp format_distribution(name, tags, buckets) do
@@ -53,88 +49,108 @@ defmodule Peep.Prometheus do
 
     {prefix_sums, count} = prefix_sums(buckets_as_floats)
 
-    {labels, label_prefix, label_joiner, label_suffix} =
+    {labels_done, bucket_partial} =
       if has_labels? do
-        {format_labels(tags), "{", ",", "}"}
+        labels = format_labels(tags)
+        {[?{, labels, "} "], [name, "_bucket{", labels, ",le=\""]}
       else
-        {"", "", "", ""}
+        {?\s, [name, "_bucket{le=\""]}
       end
 
     samples =
-      Enum.sort(prefix_sums)
-      |> Enum.map_intersperse(?\n, fn {upper_bound, count} ->
-        ~s(#{name}_bucket{#{labels}#{label_joiner}le="#{upper_bound}"} #{count})
+      prefix_sums
+      |> Enum.sort()
+      |> Enum.map(fn {upper_bound, count} ->
+        [bucket_partial, format_value(upper_bound), "\"} ", Integer.to_string(count), ?\n]
       end)
 
     sum = Map.get(buckets, :sum, 0)
     inf = Map.get(buckets, :infinity, 0)
 
-    summary =
-      [
-        ~s(#{name}_bucket{#{labels}#{label_joiner}le="+Inf"} #{count + inf}),
-        ~s(#{name}_sum#{label_prefix}#{labels}#{label_suffix} #{sum}),
-        ~s(#{name}_count#{label_prefix}#{labels}#{label_suffix} #{count + inf})
-      ]
-      |> Enum.intersperse(?\n)
-
-    Enum.intersperse([samples, summary], ?\n)
+    [
+      samples,
+      [bucket_partial, "+Inf\"} ", Integer.to_string(count + inf), ?\n],
+      [name, "_sum", labels_done, Integer.to_string(sum), ?\n],
+      [name, "_count", labels_done, Integer.to_string(count + inf), ?\n]
+    ]
   end
 
   defp format_standard({metric, series}, type) do
     name = format_name(metric.name)
-    help = "# HELP #{name} #{escape_help(metric.description)}"
-    type = "# TYPE #{name} #{type}"
+    help = ["# HELP ", name, " ", escape_help(metric.description)]
+    type = ["# TYPE ", name, " ", to_string(type)]
 
     samples =
-      Enum.map_intersperse(series, ?\n, fn {labels, value} ->
+      Enum.map(series, fn {labels, value} ->
         has_labels? = not Enum.empty?(labels)
 
         if has_labels? do
-          "#{name}{#{format_labels(labels)}} #{format_value(value)}"
+          [name, ?{, format_labels(labels), ?}, " ", format_value(value), ?\n]
         else
-          "#{name} #{format_value(value)}"
+          [name, " ", format_value(value), ?\n]
         end
       end)
 
-    Enum.intersperse([help, type, samples], ?\n)
+    [help, ?\n, type, ?\n, samples]
   end
 
   defp format_labels(labels) do
     labels
-    |> Enum.map(fn {k, v} -> ~s/#{k}="#{escape(v)}"/ end)
     |> Enum.sort()
-    |> Enum.intersperse(",")
+    |> Enum.map_intersperse(?,, fn {k, v} -> [to_string(k), "=\"", escape(v), ?"] end)
   end
 
   defp format_name(name) do
     name
     |> Enum.join("_")
-    |> String.replace(~r/[^a-zA-Z0-9_]/, "")
-    |> String.replace(~r/^[^a-zA-Z]+/, "")
+    |> format_name_start()
   end
+
+  # Name must start with an ascii letter
+  defp format_name_start(<<h, rest::binary>>) when h not in ?A..?Z and h not in ?a..?z,
+    do: format_name_start(rest)
+
+  defp format_name_start(<<rest::binary>>),
+    do: format_name_rest(rest, <<>>)
+
+  # Otherwise only letters, numbers, or _
+  defp format_name_rest(<<h, rest::binary>>, acc)
+       when h in ?A..?Z or h in ?a..?z or h in ?0..?9 or h == ?_,
+       do: format_name_rest(rest, <<acc::binary, h>>)
+
+  defp format_name_rest(<<_, rest::binary>>, acc), do: format_name_rest(rest, acc)
+  defp format_name_rest(<<>>, acc), do: acc
 
   defp format_value(true), do: "1"
   defp format_value(false), do: "0"
   defp format_value(nil), do: "0"
-  defp format_value(n) when is_integer(n), do: :erlang.integer_to_binary(n)
-  defp format_value(f) when is_float(f), do: :erlang.float_to_binary(f, [:compact])
+  defp format_value(n) when is_integer(n), do: Integer.to_string(n)
+  defp format_value(f) when is_float(f), do: Float.to_string(f)
 
   defp escape(nil), do: "nil"
 
   defp escape(value) do
     value
     |> to_string()
-    |> String.replace(~S("), ~S(\"))
-    |> String.replace(~S(\\), ~S(\\\\))
-    |> String.replace(~S(\n), ~S(\\n))
+    |> escape(<<>>)
   end
+
+  defp escape(<<?\", rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?\">>)
+  defp escape(<<?\\, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?\\>>)
+  defp escape(<<?\n, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?\n>>)
+  defp escape(<<h, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, h>>)
+  defp escape(<<>>, acc), do: acc
 
   defp escape_help(value) do
     value
     |> to_string()
-    |> String.replace(~S(\\), ~S(\\\\))
-    |> String.replace(~S(\n), ~S(\\n))
+    |> escape_help(<<>>)
   end
+
+  defp escape_help(<<?\\, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?\\>>)
+  defp escape_help(<<?\n, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?\n>>)
+  defp escape_help(<<h, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, h>>)
+  defp escape_help(<<>>, acc), do: acc
 
   defp prefix_sums(buckets), do: prefix_sums(buckets, [], 0)
   defp prefix_sums([], acc, sum), do: {Enum.reverse(acc), sum}
