@@ -31,6 +31,7 @@ defmodule Peep.EventHandler do
 
   def detach(handler_ids) do
     for id <- handler_ids, do: :telemetry.detach(id)
+    :ok
   end
 
   def handle_event(_event, measurements, metadata, %{

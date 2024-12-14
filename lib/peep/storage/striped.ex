@@ -49,7 +49,7 @@ defmodule Peep.Storage.Striped do
 
   def insert_metric(tids, %Metrics.LastValue{} = metric, value, %{} = tags) do
     tid = get_tid(tids)
-    now = :erlang.monotonic_time()
+    now = System.monotonic_time()
     key = {metric, tags}
     :ets.insert(tid, {key, {now, value}})
   end
