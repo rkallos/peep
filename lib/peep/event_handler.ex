@@ -2,6 +2,8 @@ defmodule Peep.EventHandler do
   @moduledoc false
   require Logger
 
+  @compile :inline
+
   alias Telemetry.Metrics.{Counter, Summary, Distribution}
 
   def attach(metrics, name, global_tags) do
@@ -28,7 +30,7 @@ defmodule Peep.EventHandler do
   end
 
   def detach(handler_ids) do
-    Enum.each(handler_ids, fn id -> :telemetry.detach(id) end)
+    for id <- handler_ids, do: :telemetry.detach(id)
   end
 
   def handle_event(_event, measurements, metadata, %{
@@ -37,12 +39,19 @@ defmodule Peep.EventHandler do
         global_tags: global_tags
       }) do
     for metric <- metrics do
-      if value = keep?(metric, metadata) && fetch_measurement(metric, measurements, metadata) do
+      %{
+        measurement: measurement,
+        tag_values: tag_values,
+        tags: tags,
+        keep: keep
+      } = metric
+
+      if value = keep?(keep, metadata) && fetch_measurement(measurement, measurements, metadata) do
         tag_values =
           global_tags
-          |> Map.merge(metric.tag_values.(metadata))
+          |> Map.merge(tag_values.(metadata))
 
-        tags = Map.new(metric.tags, &{&1, Map.get(tag_values, &1, "")})
+        tags = Map.new(tags, &{&1, Map.get(tag_values, &1, "")})
 
         Peep.insert_metric(name, metric, value, tags)
       end
@@ -53,15 +62,15 @@ defmodule Peep.EventHandler do
     {__MODULE__, peep_name, event_name}
   end
 
-  defp keep?(%{keep: nil}, _metadata), do: true
-  defp keep?(%{keep: keep}, metadata), do: keep.(metadata)
+  defp keep?(nil, _metadata), do: true
+  defp keep?(keep, metadata), do: keep.(metadata)
 
   defp fetch_measurement(%Counter{}, _measurements, _metadata) do
     1
   end
 
-  defp fetch_measurement(metric, measurements, metadata) do
-    case metric.measurement do
+  defp fetch_measurement(measurement, measurements, metadata) do
+    case measurement do
       nil ->
         nil
 
@@ -72,7 +81,12 @@ defmodule Peep.EventHandler do
         fun.(measurements, metadata)
 
       key ->
-        measurements[key] || 1
+        case measurements do
+          %{^key => nil} -> 1
+          %{^key => false} -> 1
+          %{^key => value} -> value
+          _ -> 1
+        end
     end
   end
 

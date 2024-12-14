@@ -34,21 +34,94 @@ defmodule Peep.Buckets.Custom do
     end
   end
 
+  ## Bucket binary search
+
   defp bucket_for_ast(buckets) do
-    bucket_defns =
-      for {boundary, bucket_idx} <- Enum.with_index(buckets) do
-        quote do
-          def bucket_for(n, _) when n < unquote(boundary), do: unquote(bucket_idx)
-        end
+    int_buckets = int_buckets(buckets, nil, 0)
+
+    float_buckets =
+      buckets
+      |> Enum.map(&(&1 * 1.0))
+      |> Enum.with_index()
+
+    variable = Macro.var(:x, nil)
+
+    int_length = length(int_buckets)
+    int_tree = build_bucket_tree(int_buckets, int_length, length(buckets), variable)
+
+    float_length = length(float_buckets)
+    float_tree = build_bucket_tree(float_buckets, float_length, length(buckets), variable)
+
+    quote do
+      def bucket_for(unquote(variable), _) when is_integer(unquote(variable)) do
+        unquote(int_tree)
       end
 
-    final_defn =
-      quote do
-        def bucket_for(_, _), do: unquote(length(buckets))
+      def bucket_for(unquote(variable), _) when is_float(unquote(variable)) do
+        unquote(float_tree)
       end
+    end
 
-    bucket_defns ++ [final_defn]
+    # |> tap(&IO.puts(Code.format_string!(Macro.to_string(&1))))
   end
+
+  defp build_bucket_tree([{bound, lval}], 1, rval, variable) do
+    quote do
+      case unquote(variable) do
+        x when x < unquote(bound) ->
+          unquote(lval)
+
+        _ ->
+          unquote(rval)
+      end
+    end
+  end
+
+  defp build_bucket_tree([{lbound, lval}, {rbound, mval}], 2, rval, variable) do
+    quote do
+      case unquote(variable) do
+        x when x < unquote(lbound) ->
+          unquote(lval)
+
+        x when x < unquote(rbound) ->
+          unquote(mval)
+
+        _ ->
+          unquote(rval)
+      end
+    end
+  end
+
+  defp build_bucket_tree(bounds, length, rval, variable) do
+    llength = div(length, 2)
+    rlength = length - llength - 1
+
+    {lbounds, rbounds} = Enum.split(bounds, llength)
+    [{bound, lval} | rbounds] = rbounds
+
+    quote do
+      case unquote(variable) do
+        x when x < unquote(bound) ->
+          unquote(build_bucket_tree(lbounds, llength, lval, variable))
+
+        _ ->
+          unquote(build_bucket_tree(rbounds, rlength, rval, variable))
+      end
+    end
+  end
+
+  defp int_buckets([], _prev, _counter) do
+    []
+  end
+
+  defp int_buckets([curr | tail], prev, counter) do
+    case ceil(curr) do
+      ^prev -> int_buckets(tail, prev, counter + 1)
+      curr -> [{curr, counter} | int_buckets(tail, curr, counter + 1)]
+    end
+  end
+
+  ## Upper bound
 
   defp upper_bound_ast(buckets) do
     bucket_defns =
@@ -67,7 +140,6 @@ defmodule Peep.Buckets.Custom do
   end
 
   defp int_to_float_string(int) do
-    # kind of a hack, but nothing else came to mind
-    to_string(:math.pow(int, 1))
+    to_string(int * 1.0)
   end
 end
