@@ -7,6 +7,8 @@ defmodule Peep.Storage.Striped do
 
   @type tids() :: %{pos_integer() => :ets.tid()}
 
+  @compile :inline
+
   @spec new() :: tids()
   @impl true
   def new() do
