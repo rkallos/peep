@@ -16,6 +16,7 @@ defmodule Peep.Buckets do
       )
     ]
   end
+  ```
 
   If no bucketing strategy is provided is not set in :reporter_options for a
   `%Telemetry.Metrics.Distribution{}`, then the default is
