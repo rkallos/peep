@@ -2,7 +2,7 @@ defmodule BucketsTest do
   use ExUnit.Case
 
   defmodule CustomBuckets do
-    use Peep.Buckets.Custom, buckets: [4, 8, 15, 16, 23, 42]
+    use Peep.Buckets.Custom, buckets: [3.14, 3.5, 4, 8, 15, 16, 23, 42, 50.5, 60]
   end
 
   alias Telemetry.Metrics
@@ -22,24 +22,35 @@ defmodule BucketsTest do
     assert config == %{}
 
     assert CustomBuckets.bucket_for(3, config) == 0
-    assert CustomBuckets.bucket_for(5, config) == 1
-    assert CustomBuckets.bucket_for(14, config) == 2
-    assert CustomBuckets.bucket_for(15, config) == 3
-    assert CustomBuckets.bucket_for(16, config) == 4
-    assert CustomBuckets.bucket_for(22, config) == 4
-    assert CustomBuckets.bucket_for(23, config) == 5
-    assert CustomBuckets.bucket_for(41, config) == 5
-    assert CustomBuckets.bucket_for(42, config) == 6
-    assert CustomBuckets.bucket_for(43, config) == 6
-    assert CustomBuckets.bucket_for(1_000, config) == 6
+    assert CustomBuckets.bucket_for(3.13, config) == 0
+    assert CustomBuckets.bucket_for(3.14, config) == 1
+    assert CustomBuckets.bucket_for(3.49, config) == 1
+    assert CustomBuckets.bucket_for(3.50, config) == 2
+    assert CustomBuckets.bucket_for(5, config) == 3
+    assert CustomBuckets.bucket_for(14, config) == 4
+    assert CustomBuckets.bucket_for(15, config) == 5
+    assert CustomBuckets.bucket_for(16, config) == 6
+    assert CustomBuckets.bucket_for(22, config) == 6
+    assert CustomBuckets.bucket_for(23, config) == 7
+    assert CustomBuckets.bucket_for(41, config) == 7
+    assert CustomBuckets.bucket_for(42, config) == 8
+    assert CustomBuckets.bucket_for(43, config) == 8
+    assert CustomBuckets.bucket_for(50, config) == 8
+    assert CustomBuckets.bucket_for(50.4, config) == 8
+    assert CustomBuckets.bucket_for(50.5, config) == 9
+    assert CustomBuckets.bucket_for(51, config) == 9
+    assert CustomBuckets.bucket_for(1_000, config) == 10
 
-    assert CustomBuckets.upper_bound(0, config) == "4.0"
-    assert CustomBuckets.upper_bound(1, config) == "8.0"
-    assert CustomBuckets.upper_bound(2, config) == "15.0"
-    assert CustomBuckets.upper_bound(3, config) == "16.0"
-    assert CustomBuckets.upper_bound(4, config) == "23.0"
-    assert CustomBuckets.upper_bound(5, config) == "42.0"
-    assert CustomBuckets.upper_bound(6, config) == "+Inf"
+    assert CustomBuckets.upper_bound(0, config) == "3.14"
+    assert CustomBuckets.upper_bound(1, config) == "3.5"
+    assert CustomBuckets.upper_bound(2, config) == "4.0"
+    assert CustomBuckets.upper_bound(3, config) == "8.0"
+    assert CustomBuckets.upper_bound(4, config) == "15.0"
+    assert CustomBuckets.upper_bound(5, config) == "16.0"
+    assert CustomBuckets.upper_bound(6, config) == "23.0"
+    assert CustomBuckets.upper_bound(7, config) == "42.0"
+    assert CustomBuckets.upper_bound(8, config) == "50.5"
+    assert CustomBuckets.upper_bound(9, config) == "60.0"
     assert CustomBuckets.upper_bound(1_000, config) == "+Inf"
   end
 
