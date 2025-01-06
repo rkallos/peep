@@ -40,9 +40,14 @@ defmodule Peep.Storage.ETS do
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
-  def insert_metric(tid, %Metrics.LastValue{} = metric, value, %{} = tags) do
+  def insert_metric(tid, %Metrics.LastValue{} = metric, value, %{} = tags)
+      when is_number(value) do
     key = {metric, tags}
     :ets.insert(tid, {key, value})
+  end
+
+  def insert_metric(_tid, %Metrics.LastValue{} = _metric, _value, _tags) do
+    raise ArgumentError
   end
 
   def insert_metric(tid, %Metrics.Distribution{} = metric, value, %{} = tags) do

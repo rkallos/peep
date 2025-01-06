@@ -47,14 +47,18 @@ defmodule Peep.EventHandler do
         keep: keep
       } = metric
 
-      if value = keep?(keep, metadata) && fetch_measurement(measurement, measurements, metadata) do
-        tag_values =
-          global_tags
-          |> Map.merge(tag_values.(metadata))
+      case keep?(keep, metadata) && fetch_measurement(measurement, measurements, metadata) do
+        value when is_number(value) ->
+          tag_values =
+            global_tags
+            |> Map.merge(tag_values.(metadata))
 
-        tags = Map.new(tags, &{&1, Map.get(tag_values, &1, "")})
+          tags = Map.new(tags, &{&1, Map.get(tag_values, &1, "")})
 
-        Peep.insert_metric(name, metric, value, tags)
+          Peep.insert_metric(name, metric, value, tags)
+
+        _ ->
+          nil
       end
     end
   end

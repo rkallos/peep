@@ -237,5 +237,21 @@ defmodule Storage.Test do
         assert mem_after > mem_before
       end
     end
+
+    test "#{impl} - inserting a non-numeric value raises an exception" do
+      storage = unquote(impl).new()
+
+      sum = Metrics.sum("storage.test.sum")
+      last_value = Metrics.last_value("storage.test.gauge")
+
+      dist =
+        Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+
+      for metric <- [sum, last_value, dist] do
+        assert_raise ArgumentError, fn ->
+          unquote(impl).insert_metric(storage, metric, :foo, %{})
+        end
+      end
+    end
   end
 end
