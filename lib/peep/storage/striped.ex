@@ -47,11 +47,16 @@ defmodule Peep.Storage.Striped do
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
-  def insert_metric(tids, %Metrics.LastValue{} = metric, value, %{} = tags) do
+  def insert_metric(tids, %Metrics.LastValue{} = metric, value, %{} = tags)
+      when is_number(value) do
     tid = get_tid(tids)
     now = System.monotonic_time()
     key = {metric, tags}
     :ets.insert(tid, {key, {now, value}})
+  end
+
+  def insert_metric(_tid, %Metrics.LastValue{} = _metric, _value, _tags) do
+    raise ArgumentError
   end
 
   def insert_metric(tids, %Metrics.Distribution{} = metric, value, %{} = tags) do

@@ -332,39 +332,6 @@ defmodule PrometheusTest do
       assert export(name) == lines_to_string(expected)
     end
 
-    test "#{impl} - non-number values" do
-      name = StorageCounter.fresh_id()
-
-      last_value =
-        Metrics.last_value(
-          "prometheus.test.gauge",
-          description: "a last_value",
-          tags: [:from]
-        )
-
-      opts = [
-        name: name,
-        metrics: [last_value],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
-
-      Peep.insert_metric(name, last_value, true, %{from: true})
-      Peep.insert_metric(name, last_value, false, %{from: false})
-      Peep.insert_metric(name, last_value, nil, %{from: nil})
-
-      expected = [
-        "# HELP prometheus_test_gauge a last_value",
-        "# TYPE prometheus_test_gauge gauge",
-        ~s(prometheus_test_gauge{from="false"} 0),
-        ~s(prometheus_test_gauge{from="nil"} 0),
-        ~s(prometheus_test_gauge{from="true"} 1)
-      ]
-
-      assert export(name) == lines_to_string(expected)
-    end
-
     test "#{impl} - regression: label escaping" do
       name = StorageCounter.fresh_id()
 
