@@ -21,6 +21,9 @@ defmodule Peep.Persistent do
 
         :striped ->
           {:striped, Peep.Storage.Striped.new()}
+
+        :fast_dist ->
+          {:fast_dist, Peep.Storage.FastDist.new()}
       end
 
     %__MODULE__{
@@ -54,6 +57,9 @@ defmodule Peep.Persistent do
 
       %__MODULE__{storage: {:striped, tids}} ->
         {Peep.Storage.Striped, tids}
+
+      %__MODULE__{storage: {:fast_dist, tid}} ->
+        {Peep.Storage.FastDist, tid}
 
       _ ->
         nil

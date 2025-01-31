@@ -6,7 +6,7 @@ defmodule PrometheusTest do
 
   alias Peep.Support.StorageCounter
 
-  @impls [:default, :striped]
+  @impls [:default, :striped, :fast_dist]
 
   for impl <- @impls do
     test "#{impl} - counter formatting" do
