@@ -24,6 +24,9 @@ defmodule Peep.Persistent do
 
         :fast_dist ->
           {:fast_dist, Peep.Storage.FastDist.new()}
+
+        :ordered_set ->
+          {:ordered_set, Peep.Storage.OrderedSet.new()}
       end
 
     %__MODULE__{
@@ -60,6 +63,9 @@ defmodule Peep.Persistent do
 
       %__MODULE__{storage: {:fast_dist, tid}} ->
         {Peep.Storage.FastDist, tid}
+
+      %__MODULE__{storage: {:ordered_set, tid}} ->
+        {Peep.Storage.OrderedSet, tid}
 
       _ ->
         nil

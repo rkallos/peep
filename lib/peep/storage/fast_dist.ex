@@ -9,7 +9,6 @@ defmodule Peep.Storage.FastDist do
   def new() do
     opts = [
       :public,
-      :ordered_set,
       # Enabling read_concurrency makes switching between reads and writes
       # more expensive. The goal is to ruthlessly optimize writes, even at
       # the cost of read performance.
@@ -25,8 +24,13 @@ defmodule Peep.Storage.FastDist do
   defdelegate get_all_metrics(tid), to: ETS
   defdelegate get_metric(tid, metric, labels), to: ETS
 
-  def insert_metric(tid, %Metrics.Distribution{} = metric, value, %{} = tags) do
-    key = {metric, tags}
+  def insert_metric(tid, metric, value, tags) do
+    insert_metric(tid, metric, :erlang.phash2(metric), value, tags)
+  end
+
+  def insert_metric(tid, %Metrics.Distribution{} = metric, hash, value, %{} = tags) do
+    hashed_tags = :erlang.phash2(tags)
+    key = {hash, hashed_tags}
 
     atomics =
       case lookup_atomics(tid, key) do
@@ -40,7 +44,7 @@ defmodule Peep.Storage.FastDist do
           # increment.
           new_atomics = Storage.Atomics.new(metric)
 
-          case :ets.insert_new(tid, {key, new_atomics}) do
+          case :ets.insert_new(tid, {key, metric, tags, new_atomics}) do
             true ->
               new_atomics
 
@@ -53,17 +57,17 @@ defmodule Peep.Storage.FastDist do
     Storage.Atomics.insert(atomics, value)
   end
 
-  def insert_metric(tid, metric, value, tags) do
-    ETS.insert_metric(tid, metric, value, tags)
+  def insert_metric(tid, metric, hash, value, tags) do
+    ETS.insert_metric(tid, metric, hash, value, tags)
   end
 
-  defp lookup_atomics(tid, {metric, tags}) do
+  defp lookup_atomics(tid, {hashed_metric, hashed_tags}) do
     atomics = :"$1"
 
     match_spec = [
       {
-        {{metric, :"$2"}, atomics},
-        [{:==, :"$2", tags}],
+        {{hashed_metric, hashed_tags}, :_, :_, atomics},
+        [],
         [atomics]
       }
     ]

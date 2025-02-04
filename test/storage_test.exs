@@ -3,7 +3,7 @@ defmodule Storage.Test do
 
   alias Telemetry.Metrics
 
-  @impls [Peep.Storage.ETS, Peep.Storage.Striped, Peep.Storage.FastDist]
+  @impls [Peep.Storage.ETS, Peep.Storage.Striped, Peep.Storage.FastDist, Peep.Storage.OrderedSet]
 
   for impl <- @impls do
     test "#{impl} - a counter can be stored and retrieved" do

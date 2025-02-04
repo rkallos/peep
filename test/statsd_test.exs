@@ -6,7 +6,7 @@ defmodule StatsdTest do
 
   alias Peep.Support.StorageCounter
 
-  @impls [:default, :striped, :fast_dist]
+  @impls [:default, :striped, :fast_dist, :ordered_set]
 
   for impl <- @impls do
     test "#{impl} - a counter can be formatted" do
