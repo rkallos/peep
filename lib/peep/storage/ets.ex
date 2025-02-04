@@ -42,7 +42,7 @@ defmodule Peep.Storage.ETS do
 
   def insert_metric(tid, %Metrics.LastValue{} = metric, value, %{} = tags) do
     key = {metric, tags}
-    :ets.insert(tid, {key, value})
+    :ets.update_element(tid, key, {2, value}, {key, value})
   end
 
   def insert_metric(tid, %Metrics.Distribution{} = metric, value, %{} = tags) do
