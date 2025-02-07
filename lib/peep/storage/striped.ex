@@ -1,11 +1,16 @@
 defmodule Peep.Storage.Striped do
-  @moduledoc false
+  @moduledoc """
+  Peep.Storage implementation using an ETS table per BEAM scheduler thread.
+
+  Offers less lock contention than `Peep.Storage.ETS`, at the cost of higher
+  memory usage. Recommended when executing thousands of metrics per second.
+  """
   alias Telemetry.Metrics
   alias Peep.Storage
 
   @behaviour Peep.Storage
 
-  @type tids() :: %{pos_integer() => :ets.tid()}
+  @typep tids() :: %{pos_integer() => :ets.tid()}
 
   @compile :inline
 

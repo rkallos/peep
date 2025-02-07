@@ -61,6 +61,7 @@ defmodule Peep.MixProject do
       source_ref: "v#{@version}",
       extras: [],
       groups_for_modules: [
+        Storage: [~r/Peep.Storage/],
         Bucketing: [~r/Peep.Buckets/]
       ]
     ]
