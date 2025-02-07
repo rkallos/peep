@@ -107,6 +107,32 @@ defmodule Peep.Storage.ETS do
     end
   end
 
+  @impl true
+  def prune_tags(tid, patterns) do
+    match_spec =
+      patterns
+      |> Enum.flat_map(fn pattern ->
+        counter_or_sum_key = {:_, pattern, :_}
+        dist_or_last_value_key = {:_, pattern}
+
+        [
+          {
+            {counter_or_sum_key, :_},
+            [],
+            [true]
+          },
+          {
+            {dist_or_last_value_key, :_},
+            [],
+            [true]
+          }
+        ]
+      end)
+
+    :ets.select_delete(tid, match_spec)
+    :ok
+  end
+
   defp group_metrics([], acc) do
     acc
   end

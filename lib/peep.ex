@@ -145,6 +145,25 @@ defmodule Peep do
     end
   end
 
+  @doc """
+  Removes metrics whose metadata contains the specified tag patterns.
+
+  Example inputs:
+
+  - `[%{foo: :bar}, %{baz: :quux}]` removes metrics with `foo == :bar` OR `baz == :quux`
+  - `[%{foo: :bar, baz: :quux}]` removes metrics with `foo == :bar` AND `baz == :quux`
+  - `[%{foo: :one}, %{foo: :two}]` removes metrics with `foo == :one` OR `foo == :two`
+  """
+  def prune_tags(name, tags_patterns) do
+    case Peep.Persistent.storage(name) do
+      {storage_mod, storage} ->
+        storage_mod.prune_tags(storage, tags_patterns)
+
+      _ ->
+        nil
+    end
+  end
+
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)

@@ -163,6 +163,27 @@ defmodule Peep.Storage.Striped do
   end
 
   @impl true
+  def prune_tags(tids, patterns) do
+    match_spec =
+      patterns
+      |> Enum.map(fn pattern ->
+        metric_key = {:_, pattern}
+
+        {
+          {metric_key, :_},
+          [],
+          [true]
+        }
+      end)
+
+    for {_, tid} <- tids do
+      :ets.select_delete(tid, match_spec)
+    end
+
+    :ok
+  end
+
+  @impl true
   def get_all_metrics(tids) do
     acc = get_all_metrics(Map.values(tids), %{})
     remove_timestamps_from_last_values(acc)
