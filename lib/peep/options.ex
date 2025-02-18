@@ -61,7 +61,7 @@ defmodule Peep.Options do
           "Global tags are overriden by the tags specified in the metric definition."
     ],
     storage: [
-      type: {:in, [:default, :striped, :default_prehashed]},
+      type: {:in, [:default, :striped, :default_prehashed, :striped_prehashed]},
       default: :default,
       doc:
         "Which storage implementation to use. " <>
