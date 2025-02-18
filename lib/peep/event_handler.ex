@@ -13,6 +13,10 @@ defmodule Peep.EventHandler do
       filtered_metrics = Enum.filter(metrics, &allow_metric?/1)
       handler_id = handler_id(event_name, name)
 
+      metrics_with_hashes =
+        filtered_metrics
+        |> Enum.map(fn metric -> {:erlang.phash2(metric), metric} end)
+
       :ok =
         :telemetry.attach(
           handler_id,
@@ -20,7 +24,7 @@ defmodule Peep.EventHandler do
           &__MODULE__.handle_event/4,
           %{
             name: name,
-            metrics: filtered_metrics,
+            metrics: metrics_with_hashes,
             global_tags: global_tags
           }
         )
@@ -39,7 +43,7 @@ defmodule Peep.EventHandler do
         metrics: metrics,
         global_tags: global_tags
       }) do
-    for metric <- metrics do
+    for {hash, metric} <- metrics do
       %{
         measurement: measurement,
         tag_values: tag_values,
@@ -54,7 +58,7 @@ defmodule Peep.EventHandler do
 
         tags = Map.new(tags, &{&1, Map.get(tag_values, &1, "")})
 
-        Peep.insert_metric(name, metric, value, tags)
+        Peep.insert_metric(name, metric, hash, value, tags)
       end
     end
   end

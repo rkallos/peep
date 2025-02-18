@@ -6,7 +6,11 @@ defmodule Peep.Persistent do
 
   @typep storage_default() :: {:default, :ets.tid()}
   @typep storage_striped() :: {:striped, %{pos_integer() => :ets.tid()}}
-  @typep storage() :: storage_default() | storage_striped()
+  @typep storage_default_prehashed() :: {:default_prehashed, :ets.tid()}
+  @typep storage() ::
+           storage_default()
+           | storage_striped()
+           | storage_default_prehashed()
 
   @type t() :: %__MODULE__{name: name(), storage: storage()}
 
@@ -21,6 +25,9 @@ defmodule Peep.Persistent do
 
         :striped ->
           {:striped, Peep.Storage.Striped.new()}
+
+        :default_prehashed ->
+          {:default, Peep.Storage.ETSPreHashed.new()}
       end
 
     %__MODULE__{
@@ -54,6 +61,9 @@ defmodule Peep.Persistent do
 
       %__MODULE__{storage: {:striped, tids}} ->
         {Peep.Storage.Striped, tids}
+
+      %__MODULE__{storage: {:default_prehashed, tid}} ->
+        {Peep.Storage.ETSPreHashed, tid}
 
       _ ->
         nil
