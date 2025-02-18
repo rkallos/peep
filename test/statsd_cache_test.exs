@@ -6,7 +6,7 @@ defmodule StatsdCacheTest do
 
   alias Peep.Support.StorageCounter
 
-  @impls [:default, :striped]
+  @impls [:default, :striped, :default_prehashed]
 
   for impl <- @impls do
     test "#{impl} - a counter with no increments is omitted from delta" do

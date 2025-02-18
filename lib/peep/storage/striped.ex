@@ -40,26 +40,31 @@ defmodule Peep.Storage.Striped do
   end
 
   @impl true
-  def insert_metric(tids, %Metrics.Counter{} = metric, _value, %{} = tags) do
+  def insert_metric(tids, metric, value, tags) do
+    insert_metric(tids, metric, :erlang.phash2(metric), value, tags)
+  end
+
+  @impl true
+  def insert_metric(tids, %Metrics.Counter{} = metric, _hash, _value, %{} = tags) do
     tid = get_tid(tids)
     key = {metric, tags}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
   end
 
-  def insert_metric(tids, %Metrics.Sum{} = metric, value, %{} = tags) do
+  def insert_metric(tids, %Metrics.Sum{} = metric, _hash, value, %{} = tags) do
     tid = get_tid(tids)
     key = {metric, tags}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
-  def insert_metric(tids, %Metrics.LastValue{} = metric, value, %{} = tags) do
+  def insert_metric(tids, %Metrics.LastValue{} = metric, _hash, value, %{} = tags) do
     tid = get_tid(tids)
     now = System.monotonic_time()
     key = {metric, tags}
     :ets.insert(tid, {key, {now, value}})
   end
 
-  def insert_metric(tids, %Metrics.Distribution{} = metric, value, %{} = tags) do
+  def insert_metric(tids, %Metrics.Distribution{} = metric, _hash, value, %{} = tags) do
     tid = get_tid(tids)
     key = {metric, tags}
 

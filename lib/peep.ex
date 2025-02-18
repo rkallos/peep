@@ -95,9 +95,13 @@ defmodule Peep do
   end
 
   def insert_metric(name, metric, value, tags) do
+    insert_metric(name, metric, :erlang.phash2(metric), value, tags)
+  end
+
+  def insert_metric(name, metric, hash, value, tags) do
     case Peep.Persistent.storage(name) do
       {storage_mod, storage} ->
-        storage_mod.insert_metric(storage, metric, value, tags)
+        storage_mod.insert_metric(storage, metric, hash, value, tags)
 
       _ ->
         nil

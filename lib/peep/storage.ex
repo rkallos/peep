@@ -20,6 +20,7 @@ defmodule Peep.Storage do
   Stores a sample metric
   """
   @callback insert_metric(term(), Metrics.t(), term(), map()) :: any()
+  @callback insert_metric(term(), Metrics.t(), integer(), term(), map()) :: any()
 
   @doc """
   Retrieves all stored metrics
