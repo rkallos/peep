@@ -237,5 +237,40 @@ defmodule Storage.Test do
         assert mem_after > mem_before
       end
     end
+
+    test "#{impl} - prune tags" do
+      impl = unquote(impl)
+      storage = impl.new()
+
+      counter = Metrics.counter("storage.test.counter")
+      sum = Metrics.sum("storage.test.sum")
+      last_value = Metrics.last_value("storage.test.gauge")
+
+      dist =
+        Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+
+      metrics = [counter, sum, last_value, dist]
+
+      populate = fn ->
+        for metric <- metrics do
+          impl.insert_metric(storage, metric, 5, %{foo: :bar})
+          impl.insert_metric(storage, metric, 5, %{baz: :quux})
+        end
+
+        assert impl.get_all_metrics(storage) != %{}
+      end
+
+      populate.()
+      assert impl.prune_tags(storage, [%{foo: :bar}, %{baz: :quux}]) == :ok
+      assert impl.get_all_metrics(storage) == %{}
+
+      populate.()
+      assert impl.prune_tags(storage, [%{foo: :bar, baz: :quux}]) == :ok
+      assert impl.get_all_metrics(storage) != %{}
+
+      populate.()
+      assert impl.prune_tags(storage, [%{foo: :blah}, %{foo: :bar}, %{baz: :quux}]) == :ok
+      assert impl.get_all_metrics(storage) == %{}
+    end
   end
 end

@@ -1,5 +1,12 @@
 defmodule Peep.Storage.ETS do
-  @moduledoc false
+  @moduledoc """
+  Peep.Storage implementation using a single ETS table.
+
+  A sane default for storing Peep metrics, with some simple optimizations.
+  If you discover that lock contention on Peep's ETS table is high,
+  consider switching to `Peep.Storage.Striped`, which reduces lock contention
+  at the cost of higher memory usage.
+  """
   alias Peep.Storage
   alias Telemetry.Metrics
 
@@ -105,6 +112,32 @@ defmodule Peep.Storage.ETS do
       [{_key, atomics}] -> Storage.Atomics.values(atomics)
       _ -> nil
     end
+  end
+
+  @impl true
+  def prune_tags(tid, patterns) do
+    match_spec =
+      patterns
+      |> Enum.flat_map(fn pattern ->
+        counter_or_sum_key = {:_, pattern, :_}
+        dist_or_last_value_key = {:_, pattern}
+
+        [
+          {
+            {counter_or_sum_key, :_},
+            [],
+            [true]
+          },
+          {
+            {dist_or_last_value_key, :_},
+            [],
+            [true]
+          }
+        ]
+      end)
+
+    :ets.select_delete(tid, match_spec)
+    :ok
   end
 
   defp group_metrics([], acc) do
