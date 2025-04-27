@@ -41,7 +41,7 @@ defmodule PeepTest do
   test "a worker with non-empty global_tags applies to all metrics" do
     name = :"#{__MODULE__}_global_tags"
 
-    tags = %{foo: "bar", baz: "quux"}
+    tags = %{foo: "bar", baz: "quux", service: "my-app", env: "production"}
     tag_keys = [:foo, :baz]
 
     counter = Metrics.counter("peep.counter", event_name: [:counter], tags: tag_keys)
