@@ -40,28 +40,28 @@ defmodule Peep.Storage.Striped do
   end
 
   @impl true
-  def insert_metric(tids, %Metrics.Counter{} = metric, _value, %{} = tags) do
+  def insert_metric(tids, id, %Metrics.Counter{}, _value, %{} = tags) do
     tid = get_tid(tids)
-    key = {metric, tags}
+    key = {id, tags}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
   end
 
-  def insert_metric(tids, %Metrics.Sum{} = metric, value, %{} = tags) do
+  def insert_metric(tids, id, %Metrics.Sum{}, value, %{} = tags) do
     tid = get_tid(tids)
-    key = {metric, tags}
+    key = {id, tags}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
-  def insert_metric(tids, %Metrics.LastValue{} = metric, value, %{} = tags) do
+  def insert_metric(tids, id, %Metrics.LastValue{}, value, %{} = tags) do
     tid = get_tid(tids)
     now = System.monotonic_time()
-    key = {metric, tags}
+    key = {id, tags}
     :ets.insert(tid, {key, {now, value}})
   end
 
-  def insert_metric(tids, %Metrics.Distribution{} = metric, value, %{} = tags) do
+  def insert_metric(tids, id, %Metrics.Distribution{} = metric, value, %{} = tags) do
     tid = get_tid(tids)
-    key = {metric, tags}
+    key = {id, tags}
 
     atomics =
       case :ets.lookup(tid, key) do
@@ -95,11 +95,8 @@ defmodule Peep.Storage.Striped do
   end
 
   @impl true
-  def get_metric(tids, metrics, tags) when is_list(tags),
-    do: get_metric(tids, metrics, Map.new(tags))
-
-  def get_metric(tids, %Metrics.Counter{} = metric, tags) do
-    key = {metric, tags}
+  def get_metric(tids, id, %Metrics.Counter{}, tags) do
+    key = {id, tags}
 
     for tid <- Map.values(tids), reduce: 0 do
       acc ->
@@ -110,8 +107,8 @@ defmodule Peep.Storage.Striped do
     end
   end
 
-  def get_metric(tids, %Metrics.Sum{} = metric, tags) do
-    key = {metric, tags}
+  def get_metric(tids, id, %Metrics.Sum{}, tags) do
+    key = {id, tags}
 
     for tid <- Map.values(tids), reduce: 0 do
       acc ->
@@ -122,8 +119,8 @@ defmodule Peep.Storage.Striped do
     end
   end
 
-  def get_metric(tids, %Metrics.LastValue{} = metric, tags) do
-    key = {metric, tags}
+  def get_metric(tids, id, %Metrics.LastValue{}, tags) do
+    key = {id, tags}
 
     {_ts, value} =
       for tid <- Map.values(tids), reduce: nil do
@@ -144,8 +141,8 @@ defmodule Peep.Storage.Striped do
     value
   end
 
-  def get_metric(tids, %Metrics.Distribution{} = metric, tags) do
-    key = {metric, tags}
+  def get_metric(tids, id, %Metrics.Distribution{}, tags) do
+    key = {id, tags}
 
     merge_fun = fn _k, v1, v2 -> v1 + v2 end
 
@@ -172,10 +169,8 @@ defmodule Peep.Storage.Striped do
     match_spec =
       patterns
       |> Enum.map(fn pattern ->
-        metric_key = {:_, pattern}
-
         {
-          {metric_key, :_},
+          {{:_, pattern}, :_},
           [],
           [true]
         }
@@ -189,36 +184,41 @@ defmodule Peep.Storage.Striped do
   end
 
   @impl true
-  def get_all_metrics(tids) do
-    acc = get_all_metrics(Map.values(tids), %{})
+  def get_all_metrics(tids, %Peep.Persistent{ids_to_metrics: itm}) do
+    acc = get_all_metrics2(Map.values(tids), itm, %{})
     remove_timestamps_from_last_values(acc)
   end
 
-  defp get_all_metrics([], acc), do: acc
+  defp get_all_metrics2([], _itm, acc), do: acc
 
-  defp get_all_metrics([tid | rest], acc) do
-    acc = add_metrics(:ets.tab2list(tid), acc)
-    get_all_metrics(rest, acc)
+  defp get_all_metrics2([tid | rest], itm, acc) do
+    acc = add_metrics(:ets.tab2list(tid), itm, acc)
+    get_all_metrics2(rest, itm, acc)
   end
 
-  defp add_metrics([], acc), do: acc
+  defp add_metrics([], _itm, acc), do: acc
 
-  defp add_metrics([metric | rest], acc) do
-    acc2 = add_metric(metric, acc)
-    add_metrics(rest, acc2)
+  defp add_metrics([metric | rest], itm, acc) do
+    acc2 = add_metric(metric, itm, acc)
+    add_metrics(rest, itm, acc2)
   end
 
-  defp add_metric({{%Metrics.Counter{} = metric, tags}, value}, acc) do
+  defp add_metric({{id, _tags}, _value} = kv, itm, acc) do
+    %{^id => metric} = itm
+    add_metric2(kv, metric, acc)
+  end
+
+  defp add_metric2({{_id, tags}, value}, %Metrics.Counter{} = metric, acc) do
     path = [Access.key(metric, %{}), Access.key(tags, 0)]
     update_in(acc, path, &(&1 + value))
   end
 
-  defp add_metric({{%Metrics.Sum{} = metric, tags}, value}, acc) do
+  defp add_metric2({{_id, tags}, value}, %Metrics.Sum{} = metric, acc) do
     path = [Access.key(metric, %{}), Access.key(tags, 0)]
     update_in(acc, path, &(&1 + value))
   end
 
-  defp add_metric({{%Metrics.LastValue{} = metric, tags}, {_, _} = a}, acc) do
+  defp add_metric2({{_id, tags}, {_, _} = a}, %Metrics.LastValue{} = metric, acc) do
     path = [
       Access.key(:last_values, %{}),
       Access.key(metric, %{}),
@@ -228,7 +228,7 @@ defmodule Peep.Storage.Striped do
     update_in(acc, path, fn {_, _} = b -> max(a, b) end)
   end
 
-  defp add_metric({{%Metrics.Distribution{} = metric, tags}, atomics}, acc) do
+  defp add_metric2({{_id, tags}, atomics}, %Metrics.Distribution{} = metric, acc) do
     path = [
       Access.key(metric, %{}),
       Access.key(tags, %{})

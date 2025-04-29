@@ -140,4 +140,33 @@ defmodule PeepTest do
 
     assert [] == :telemetry.list_handlers(prefix)
   end
+
+  test "assign_ids" do
+    metrics =
+      [c, s, d, l] = [
+        Metrics.counter("one.two"),
+        Metrics.sum("one.two"),
+        Metrics.distribution("three.four"),
+        Metrics.last_value("five.six")
+      ]
+
+    expected_by_event = %{
+      [:one] => [{c, 1}, {s, 2}],
+      [:three] => [{d, 3}],
+      [:five] => [{l, 4}]
+    }
+
+    expected_by_id = %{1 => c, 2 => s, 3 => d, 4 => l}
+    expected_by_metric = %{c => 1, s => 2, d => 3, l => 4}
+
+    %{
+      events_to_metrics: actual_by_event,
+      ids_to_metrics: actual_by_id,
+      metrics_to_ids: actual_by_metric
+    } = Peep.assign_metric_ids(metrics)
+
+    assert actual_by_event == expected_by_event
+    assert actual_by_id == expected_by_id
+    assert actual_by_metric == expected_by_metric
+  end
 end

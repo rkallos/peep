@@ -1,7 +1,6 @@
 defmodule Peep.Statsd.Packet do
   @moduledoc false
   alias __MODULE__
-  require Logger
 
   defstruct keys: [], lines: [], remaining: nil, max_size: nil
 
