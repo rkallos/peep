@@ -1,7 +1,7 @@
 # Peep
 
-![Hex version badge](https://img.shields.io/hexpm/v/peep)
-![Hexdocs badge](https://img.shields.io/static/v1?message=hexdocs&label=&color=B1A5EE)
+[![Hex version badge](https://img.shields.io/hexpm/v/peep)](https://hex.pm/packages/peep)
+[![Hexdocs badge](https://img.shields.io/static/v1?message=hexdocs&label=&color=B1A5EE)](https://hexdocs.pm/peep)
 ![Elixir CI badge](https://github.com/rkallos/peep/actions/workflows/elixir.yml/badge.svg)
 ![Hex licence badge](https://img.shields.io/hexpm/l/peep)
 
