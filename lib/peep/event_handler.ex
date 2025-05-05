@@ -52,7 +52,8 @@ defmodule Peep.EventHandler do
           global_tags
           |> Map.merge(tag_values.(metadata))
 
-        tags = Map.new(tags, &{&1, Map.get(tag_values, &1, "")})
+        tag_keys = tags ++ Map.keys(global_tags)
+        tags = Map.new(tag_keys, &{&1, Map.get(tag_values, &1, "")})
 
         Peep.insert_metric(name, metric, value, tags)
       end
