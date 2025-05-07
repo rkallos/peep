@@ -209,34 +209,37 @@ defmodule Peep.Storage.Striped do
   end
 
   defp add_metric({{%Metrics.Counter{} = metric, tags}, value}, acc) do
-    path = [Access.key(metric, %{}), Access.key(tags, 0)]
-    update_in(acc, path, &(&1 + value))
+    acc
+    |> Map.update(metric, %{tags => value}, fn metrics_map ->
+      Map.update(metrics_map, tags, value, &(&1 + value))
+    end)
   end
 
   defp add_metric({{%Metrics.Sum{} = metric, tags}, value}, acc) do
-    path = [Access.key(metric, %{}), Access.key(tags, 0)]
-    update_in(acc, path, &(&1 + value))
+    acc
+    |> Map.update(metric, %{tags => value}, fn metrics_map ->
+      Map.update(metrics_map, tags, value, &(&1 + value))
+    end)
   end
 
   defp add_metric({{%Metrics.LastValue{} = metric, tags}, {_, _} = a}, acc) do
-    path = [
-      Access.key(:last_values, %{}),
-      Access.key(metric, %{}),
-      Access.key(tags, a)
-    ]
-
-    update_in(acc, path, fn {_, _} = b -> max(a, b) end)
+    acc
+    |> Map.update(:last_values, %{metric => %{tags => a}}, fn last_values_map ->
+      Map.update(last_values_map, metric, %{tags => a}, fn tags_map ->
+        Map.update(tags_map, tags, a, fn {_, _} = b -> max(a, b) end)
+      end)
+    end)
   end
 
   defp add_metric({{%Metrics.Distribution{} = metric, tags}, atomics}, acc) do
-    path = [
-      Access.key(metric, %{}),
-      Access.key(tags, %{})
-    ]
-
     values = Storage.Atomics.values(atomics)
 
-    update_in(acc, path, fn m1 -> Map.merge(m1, values, fn _k, v1, v2 -> v1 + v2 end) end)
+    acc
+    |> Map.update(metric, %{tags => values}, fn metrics_map ->
+      Map.update(metrics_map, tags, values, fn m1 ->
+        Map.merge(m1, values, fn _k, v1, v2 -> v1 + v2 end)
+      end)
+    end)
   end
 
   defp remove_timestamps_from_last_values(%{last_values: lvs} = metrics) do
