@@ -209,22 +209,19 @@ defmodule Peep.Storage.Striped do
   end
 
   defp add_metric({{%Metrics.Counter{} = metric, tags}, value}, acc) do
-    acc
-    |> Map.update(metric, %{tags => value}, fn metrics_map ->
+    Map.update(acc, metric, %{tags => value}, fn metrics_map ->
       Map.update(metrics_map, tags, value, &(&1 + value))
     end)
   end
 
   defp add_metric({{%Metrics.Sum{} = metric, tags}, value}, acc) do
-    acc
-    |> Map.update(metric, %{tags => value}, fn metrics_map ->
+    Map.update(acc, metric, %{tags => value}, fn metrics_map ->
       Map.update(metrics_map, tags, value, &(&1 + value))
     end)
   end
 
   defp add_metric({{%Metrics.LastValue{} = metric, tags}, {_, _} = a}, acc) do
-    acc
-    |> Map.update(:last_values, %{metric => %{tags => a}}, fn last_values_map ->
+    Map.update(acc, :last_values, %{metric => %{tags => a}}, fn last_values_map ->
       Map.update(last_values_map, metric, %{tags => a}, fn tags_map ->
         Map.update(tags_map, tags, a, fn {_, _} = b -> max(a, b) end)
       end)
