@@ -169,4 +169,40 @@ defmodule PeepTest do
     assert actual_by_id == expected_by_id
     assert actual_by_metric == expected_by_metric
   end
+
+  test "Non-numeric values are dropped" do
+    name = :"#{__MODULE__}_non_numeric_values"
+
+    sum = Metrics.sum("#{name}.sum", event_name: [name, :sum], measurement: :value)
+
+    last_value =
+      Metrics.last_value("#{name}.last_value",
+        event_name: [name, :last_value],
+        measurement: :value
+      )
+
+    dist =
+      Metrics.distribution(
+        "#{name}.dist",
+        event_name: [name, :dist],
+        measurement: :value
+      )
+
+    metrics = [sum, last_value, dist]
+
+    options = [
+      name: name,
+      metrics: metrics
+    ]
+
+    {:ok, _pid} = Peep.start_link(options)
+
+    :telemetry.execute([name, :sum], %{value: :foo})
+    :telemetry.execute([name, :last_value], %{value: "bar"})
+    :telemetry.execute([name, :dist], %{value: []})
+
+    assert Peep.get_metric(name, sum, []) == 0
+    assert Peep.get_metric(name, last_value, []) == nil
+    assert Peep.get_metric(name, dist, []) == nil
+  end
 end

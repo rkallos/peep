@@ -54,13 +54,14 @@ defmodule Peep.Codegen do
             keep: keep
           } = metric
 
-          if value =
-               keep?(keep, metadata) && fetch_measurement(measurement, measurements, metadata) do
-            tag_values = Map.merge(global_tags, tag_values.(metadata))
+          case keep?(keep, metadata) && fetch_measurement(measurement, measurements, metadata) do
+            value when is_number(value) ->
+              tag_values = Map.merge(global_tags, tag_values.(metadata))
+              tags = Map.new(global_tags_keys ++ tags, &{&1, Map.get(tag_values, &1, "")})
+              storage_mod.insert_metric(storage, id, metric, value, tags)
 
-            tags = Map.new(global_tags_keys ++ tags, &{&1, Map.get(tag_values, &1, "")})
-
-            storage_mod.insert_metric(storage, id, metric, value, tags)
+            _ ->
+              nil
           end
         end
 
