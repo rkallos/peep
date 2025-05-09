@@ -19,6 +19,7 @@ defmodule Peep.Codegen do
       quote do
         defmodule unquote(module_name) do
           def global_tags(), do: unquote(Macro.escape(global_tags))
+          def global_tags_keys(), do: unquote(Macro.escape(Map.keys(global_tags)))
           def name(), do: unquote(name)
 
           unquote(handle_event_ast)
@@ -38,6 +39,7 @@ defmodule Peep.Codegen do
     quote do
       def handle_event(event, measurements, metadata, _) do
         global_tags = global_tags()
+        global_tags_keys = global_tags_keys()
 
         %Persistent{
           events_to_metrics: %{^event => metrics},
@@ -56,7 +58,7 @@ defmodule Peep.Codegen do
                keep?(keep, metadata) && fetch_measurement(measurement, measurements, metadata) do
             tag_values = Map.merge(global_tags, tag_values.(metadata))
 
-            tags = Map.new(tags, &{&1, Map.get(tag_values, &1, "")})
+            tags = Map.new(global_tags_keys ++ tags, &{&1, Map.get(tag_values, &1, "")})
 
             storage_mod.insert_metric(storage, id, metric, value, tags)
           end
