@@ -37,23 +37,23 @@ defmodule Peep.Storage.ETS do
   end
 
   @impl true
-  def insert_metric(tid, %Metrics.Counter{} = metric, _value, %{} = tags) do
-    key = {metric, tags, :erlang.system_info(:scheduler_id)}
+  def insert_metric(tid, id, %Metrics.Counter{}, _value, %{} = tags) do
+    key = {id, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
   end
 
-  def insert_metric(tid, %Metrics.Sum{} = metric, value, %{} = tags) do
-    key = {metric, tags, :erlang.system_info(:scheduler_id)}
+  def insert_metric(tid, id, %Metrics.Sum{}, value, %{} = tags) do
+    key = {id, tags, :erlang.system_info(:scheduler_id)}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
-  def insert_metric(tid, %Metrics.LastValue{} = metric, value, %{} = tags) do
-    key = {metric, tags}
+  def insert_metric(tid, id, %Metrics.LastValue{}, value, %{} = tags) do
+    key = {id, tags}
     :ets.insert(tid, {key, value})
   end
 
-  def insert_metric(tid, %Metrics.Distribution{} = metric, value, %{} = tags) do
-    key = {metric, tags}
+  def insert_metric(tid, id, %Metrics.Distribution{} = metric, value, %{} = tags) do
+    key = {id, tags}
 
     atomics =
       case :ets.lookup(tid, key) do
@@ -81,34 +81,33 @@ defmodule Peep.Storage.ETS do
   end
 
   @impl true
-  def get_all_metrics(tid) do
+  def get_all_metrics(tid, %Peep.Persistent{ids_to_metrics: itm}) do
     :ets.tab2list(tid)
-    |> group_metrics(%{})
+    |> group_metrics(itm, %{})
   end
 
   @impl true
-  def get_metric(tid, metrics, tags) when is_list(tags),
-    do: get_metric(tid, metrics, Map.new(tags))
-
-  def get_metric(tid, %Metrics.Counter{} = metric, tags) do
-    :ets.select(tid, [{{{metric, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
+  def get_metric(tid, id, %Metrics.Counter{}, tags) do
+    :ets.select(tid, [{{{id, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
     |> Enum.reduce(0, fn count, acc -> count + acc end)
   end
 
-  def get_metric(tid, %Metrics.Sum{} = metric, tags) do
-    :ets.select(tid, [{{{metric, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
+  def get_metric(tid, id, %Metrics.Sum{}, tags) do
+    :ets.select(tid, [{{{id, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
     |> Enum.reduce(0, fn count, acc -> count + acc end)
   end
 
-  def get_metric(tid, %Metrics.LastValue{} = metric, tags) do
-    case :ets.lookup(tid, {metric, tags}) do
+  def get_metric(tid, id, %Metrics.LastValue{}, tags) do
+    case :ets.lookup(tid, {id, tags}) do
       [{_key, value}] -> value
       _ -> nil
     end
   end
 
-  def get_metric(tid, %Metrics.Distribution{} = metric, tags) do
-    case :ets.lookup(tid, {metric, tags}) do
+  def get_metric(tid, id, %Metrics.Distribution{}, tags) do
+    key = {id, tags}
+
+    case :ets.lookup(tid, key) do
       [{_key, atomics}] -> Storage.Atomics.values(atomics)
       _ -> nil
     end
@@ -140,28 +139,27 @@ defmodule Peep.Storage.ETS do
     :ok
   end
 
-  defp group_metrics([], acc) do
+  defp group_metrics([], _itm, acc) do
     acc
   end
 
-  defp group_metrics([metric | rest], acc) do
-    acc2 = group_metric(metric, acc)
-    group_metrics(rest, acc2)
+  defp group_metrics([metric | rest], itm, acc) do
+    acc2 = group_metric(metric, itm, acc)
+    group_metrics(rest, itm, acc2)
   end
 
-  defp group_metric({{%Metrics.Counter{} = metric, tags, _}, value}, acc) do
+  defp group_metric({{id, tags, _}, value}, itm, acc) do
+    %{^id => metric} = itm
     update_in(acc, [Access.key(metric, %{}), Access.key(tags, 0)], &(&1 + value))
   end
 
-  defp group_metric({{%Metrics.Sum{} = metric, tags, _}, value}, acc) do
-    update_in(acc, [Access.key(metric, %{}), Access.key(tags, 0)], &(&1 + value))
-  end
-
-  defp group_metric({{%Metrics.LastValue{} = metric, tags}, value}, acc) do
-    put_in(acc, [Access.key(metric, %{}), Access.key(tags)], value)
-  end
-
-  defp group_metric({{%Metrics.Distribution{} = metric, tags}, atomics}, acc) do
+  defp group_metric({{id, tags}, %Storage.Atomics{} = atomics}, itm, acc) do
+    %{^id => metric} = itm
     put_in(acc, [Access.key(metric, %{}), Access.key(tags)], Storage.Atomics.values(atomics))
+  end
+
+  defp group_metric({{id, tags}, value}, itm, acc) do
+    %{^id => metric} = itm
+    put_in(acc, [Access.key(metric, %{}), Access.key(tags)], value)
   end
 end

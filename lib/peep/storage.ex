@@ -19,17 +19,17 @@ defmodule Peep.Storage do
   @doc """
   Stores a sample metric
   """
-  @callback insert_metric(term(), Metrics.t(), term(), map()) :: any()
+  @callback insert_metric(term(), Peep.metric_id(), Metrics.t(), term(), map()) :: any()
 
   @doc """
   Retrieves all stored metrics
   """
-  @callback get_all_metrics(term()) :: map()
+  @callback get_all_metrics(term(), Peep.Persistent.t()) :: map()
 
   @doc """
   Retrieves a single stored metric
   """
-  @callback get_metric(term(), Metrics.t(), map()) :: any()
+  @callback get_metric(term(), Peep.metric_id(), Metrics.t(), map()) :: any()
 
   @doc """
   Removes metrics whose metadata contains a specific tag key and value.

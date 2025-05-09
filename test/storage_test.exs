@@ -5,79 +5,82 @@ defmodule Storage.Test do
 
   @impls [Peep.Storage.ETS, Peep.Storage.Striped]
 
+  defp storage_to_option(Peep.Storage.ETS), do: :default
+  defp storage_to_option(Peep.Storage.Striped), do: :striped
+
   for impl <- @impls do
     test "#{impl} - a counter can be stored and retrieved" do
-      tids = unquote(impl).new()
-
       counter = Metrics.counter("storage.test.counter")
+
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [counter])
 
       f = fn ->
         for i <- 1..10 do
-          unquote(impl).insert_metric(tids, counter, 1, %{})
+          Peep.insert_metric(name, counter, 1, %{})
 
           if rem(i, 2) == 0 do
-            unquote(impl).insert_metric(tids, counter, 1, %{even: true})
+            Peep.insert_metric(name, counter, 1, %{even: true})
           end
         end
       end
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      assert unquote(impl).get_metric(tids, counter, %{}) == 1000
-      assert unquote(impl).get_metric(tids, counter, %{even: true}) == 500
+      assert Peep.get_metric(name, counter, %{}) == 1000
+      assert Peep.get_metric(name, counter, %{even: true}) == 500
     end
 
     test "#{impl} - a sum can be stored and retrieved" do
-      tid = unquote(impl).new()
-
       sum = Metrics.sum("storage.test.sum")
+
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [sum])
 
       f = fn ->
         for i <- 1..10 do
-          unquote(impl).insert_metric(tid, sum, 2, %{})
+          Peep.insert_metric(name, sum, 2, %{})
 
           if rem(i, 2) == 0 do
-            unquote(impl).insert_metric(tid, sum, 3, %{even: true})
+            Peep.insert_metric(name, sum, 3, %{even: true})
           end
         end
       end
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      assert unquote(impl).get_metric(tid, sum, []) == 100 * 20
-      assert unquote(impl).get_metric(tid, sum, even: true) == 100 * 15
+      assert Peep.get_metric(name, sum, []) == 100 * 20
+      assert Peep.get_metric(name, sum, even: true) == 100 * 15
     end
 
     test "#{impl} - a last_value can be stored and retrieved" do
-      tid = unquote(impl).new()
-
       last_value = Metrics.last_value("storage.test.gauge")
+
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [last_value])
 
       f = fn ->
         for i <- 1..10 do
-          unquote(impl).insert_metric(tid, last_value, i, %{})
+          Peep.insert_metric(name, last_value, i, %{})
 
           if rem(i, 2) == 1 do
-            unquote(impl).insert_metric(tid, last_value, i, %{odd: true})
+            Peep.insert_metric(name, last_value, i, %{odd: true})
           end
         end
       end
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      assert unquote(impl).get_metric(tid, last_value, []) == 10
-      assert unquote(impl).get_metric(tid, last_value, odd: true) == 9
+      assert Peep.get_metric(name, last_value, []) == 10
+      assert Peep.get_metric(name, last_value, odd: true) == 9
     end
 
     test "#{impl} - a distribution can be stored and retrieved" do
-      tid = unquote(impl).new()
-
       dist =
         Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
 
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [dist])
+
       f = fn ->
         for i <- 0..2000 do
-          unquote(impl).insert_metric(tid, dist, i, %{})
+          Peep.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -124,12 +127,10 @@ defmodule Storage.Test do
         :sum => 100 * 2_001_000
       }
 
-      assert unquote(impl).get_metric(tid, dist, []) == expected
+      assert Peep.get_metric(name, dist, []) == expected
     end
 
     test "#{impl} - distribution bucket variability" do
-      tid = unquote(impl).new()
-
       dist =
         Metrics.distribution("storage.test.distribution",
           reporter_options: [
@@ -138,9 +139,11 @@ defmodule Storage.Test do
           ]
         )
 
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [dist])
+
       f = fn ->
         for i <- 0..1000 do
-          unquote(impl).insert_metric(tid, dist, i, %{})
+          Peep.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -166,12 +169,10 @@ defmodule Storage.Test do
         :sum => 500_500 * 100
       }
 
-      assert unquote(impl).get_metric(tid, dist, []) == expected
+      assert Peep.get_metric(name, dist, []) == expected
     end
 
     test "#{impl} - default distribution handles negative values" do
-      tid = unquote(impl).new()
-
       dist =
         Metrics.distribution("storage.test.distribution",
           reporter_options: [
@@ -180,9 +181,11 @@ defmodule Storage.Test do
           ]
         )
 
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [dist])
+
       f = fn ->
         for i <- -500..500 do
-          unquote(impl).insert_metric(tid, dist, i, %{})
+          Peep.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -207,12 +210,10 @@ defmodule Storage.Test do
         :sum => 0
       }
 
-      assert unquote(impl).get_metric(tid, dist, []) == expected
+      assert Peep.get_metric(name, dist, []) == expected
     end
 
     test "#{impl} - storage_size/1" do
-      storage = unquote(impl).new()
-
       counter = Metrics.counter("storage.test.counter")
       sum = Metrics.sum("storage.test.sum")
       last_value = Metrics.last_value("storage.test.gauge")
@@ -221,6 +222,8 @@ defmodule Storage.Test do
         Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
 
       metrics = [counter, sum, last_value, dist]
+
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: metrics)
 
       tags_sets = [
         %{},
@@ -229,9 +232,9 @@ defmodule Storage.Test do
       ]
 
       for metric <- metrics, tags <- tags_sets do
-        %{size: size_before, memory: mem_before} = unquote(impl).storage_size(storage)
-        unquote(impl).insert_metric(storage, metric, 5, tags)
-        %{size: size_after, memory: mem_after} = unquote(impl).storage_size(storage)
+        %{size: size_before, memory: mem_before} = Peep.storage_size(name)
+        Peep.insert_metric(name, metric, 5, tags)
+        %{size: size_after, memory: mem_after} = Peep.storage_size(name)
 
         assert size_after > size_before
         assert mem_after > mem_before
@@ -239,9 +242,6 @@ defmodule Storage.Test do
     end
 
     test "#{impl} - prune tags" do
-      impl = unquote(impl)
-      storage = impl.new()
-
       counter = Metrics.counter("storage.test.counter")
       sum = Metrics.sum("storage.test.sum")
       last_value = Metrics.last_value("storage.test.gauge")
@@ -251,26 +251,35 @@ defmodule Storage.Test do
 
       metrics = [counter, sum, last_value, dist]
 
+      name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: metrics)
+
       populate = fn ->
         for metric <- metrics do
-          impl.insert_metric(storage, metric, 5, %{foo: :bar})
-          impl.insert_metric(storage, metric, 5, %{baz: :quux})
+          Peep.insert_metric(name, metric, 5, %{foo: :bar})
+          Peep.insert_metric(name, metric, 5, %{baz: :quux})
         end
 
-        assert impl.get_all_metrics(storage) != %{}
+        assert Peep.get_all_metrics(name) != %{}
       end
 
       populate.()
-      assert impl.prune_tags(storage, [%{foo: :bar}, %{baz: :quux}]) == :ok
-      assert impl.get_all_metrics(storage) == %{}
+      assert Peep.prune_tags(name, [%{foo: :bar}, %{baz: :quux}]) == :ok
+      assert Peep.get_all_metrics(name) == %{}
 
       populate.()
-      assert impl.prune_tags(storage, [%{foo: :bar, baz: :quux}]) == :ok
-      assert impl.get_all_metrics(storage) != %{}
+      assert Peep.prune_tags(name, [%{foo: :bar, baz: :quux}]) == :ok
+      assert Peep.get_all_metrics(name) != %{}
 
       populate.()
-      assert impl.prune_tags(storage, [%{foo: :blah}, %{foo: :bar}, %{baz: :quux}]) == :ok
-      assert impl.get_all_metrics(storage) == %{}
+      assert Peep.prune_tags(name, [%{foo: :blah}, %{foo: :bar}, %{baz: :quux}]) == :ok
+      assert Peep.get_all_metrics(name) == %{}
     end
+  end
+
+  defp start_peep!(options) do
+    name = Peep.Support.StorageCounter.fresh_id()
+
+    {:ok, _pid} = Peep.start_link(Keyword.put(options, :name, name))
+    name
   end
 end

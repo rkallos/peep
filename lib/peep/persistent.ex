@@ -1,31 +1,51 @@
 defmodule Peep.Persistent do
   @moduledoc false
-  defstruct [:name, :storage]
+  defstruct [:name, :storage, :events_to_metrics, :ids_to_metrics, :metrics_to_ids]
 
   @type name() :: atom()
 
-  @typep storage_default() :: {:default, :ets.tid()}
-  @typep storage_striped() :: {:striped, %{pos_integer() => :ets.tid()}}
+  @typep storage_default() :: {Peep.Storage.ETS, :ets.tid()}
+  @typep storage_striped() :: {Peep.Storage.Striped, %{pos_integer() => :ets.tid()}}
   @typep storage() :: storage_default() | storage_striped()
+  @typep events_to_metrics() :: %{
+           :telemetry.event_name() => [{Telemetry.Metrics.t(), non_neg_integer()}]
+         }
+  @typep ids_to_metrics :: %{Peep.metric_id() => Telemetry.Metrics.t()}
+  @typep metrics_to_ids :: %{Telemetry.Metrics.t() => Peep.metric_id()}
 
-  @type t() :: %__MODULE__{name: name(), storage: storage()}
+  @type t() :: %__MODULE__{
+          name: name(),
+          storage: storage(),
+          events_to_metrics: events_to_metrics(),
+          ids_to_metrics: ids_to_metrics(),
+          metrics_to_ids: metrics_to_ids()
+        }
 
   @spec new(Peep.Options.t()) :: t()
   def new(%Peep.Options{} = options) do
-    %Peep.Options{name: name, storage: storage_impl} = options
+    %Peep.Options{name: name, storage: storage_impl, metrics: metrics} = options
 
     storage =
       case storage_impl do
         :default ->
-          {:default, Peep.Storage.ETS.new()}
+          {Peep.Storage.ETS, Peep.Storage.ETS.new()}
 
         :striped ->
-          {:striped, Peep.Storage.Striped.new()}
+          {Peep.Storage.Striped, Peep.Storage.Striped.new()}
       end
+
+    %{
+      events_to_metrics: events_to_metrics,
+      ids_to_metrics: ids_to_metrics,
+      metrics_to_ids: metrics_to_ids
+    } = Peep.assign_metric_ids(metrics)
 
     %__MODULE__{
       name: name,
-      storage: storage
+      storage: storage,
+      events_to_metrics: events_to_metrics,
+      ids_to_metrics: ids_to_metrics,
+      metrics_to_ids: metrics_to_ids
     }
   end
 
@@ -49,11 +69,8 @@ defmodule Peep.Persistent do
   @spec storage(name()) :: {module(), term()} | nil
   def storage(name) when is_atom(name) do
     case fetch(name) do
-      %__MODULE__{storage: {:default, tid}} ->
-        {Peep.Storage.ETS, tid}
-
-      %__MODULE__{storage: {:striped, tids}} ->
-        {Peep.Storage.Striped, tids}
+      %__MODULE__{storage: s} ->
+        s
 
       _ ->
         nil

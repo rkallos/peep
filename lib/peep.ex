@@ -80,6 +80,8 @@ defmodule Peep do
               statsd_state: nil
   end
 
+  @type metric_id() :: pos_integer()
+
   def child_spec(options) do
     %{id: peep_name!(options), start: {__MODULE__, :start_link, [options]}}
   end
@@ -94,15 +96,20 @@ defmodule Peep do
     end
   end
 
-  def insert_metric(name, metric, value, tags) do
-    case Peep.Persistent.storage(name) do
-      {storage_mod, storage} ->
-        storage_mod.insert_metric(storage, metric, value, tags)
+  def insert_metric(name, metric, value, tags) when is_number(value) do
+    case Peep.Persistent.fetch(name) do
+      %Peep.Persistent{
+        storage: {storage_mod, storage},
+        metrics_to_ids: %{^metric => id}
+      } ->
+        storage_mod.insert_metric(storage, id, metric, value, tags)
 
       _ ->
         nil
     end
   end
+
+  def insert_metric(_name, _metric, _value, _tags), do: nil
 
   @doc """
   Returns measurements about the size of a running Peep's storage, in number of
@@ -123,9 +130,9 @@ defmodule Peep do
   StatsD data.
   """
   def get_all_metrics(name) do
-    case Peep.Persistent.storage(name) do
-      {storage_mod, storage} ->
-        storage_mod.get_all_metrics(storage)
+    case Peep.Persistent.fetch(name) do
+      %Peep.Persistent{storage: {storage_mod, storage}} = p ->
+        storage_mod.get_all_metrics(storage, p)
 
       _ ->
         nil
@@ -135,10 +142,17 @@ defmodule Peep do
   @doc """
   Fetches a single metric from storage. Currently only used in tests.
   """
+  def get_metric(name, metric, tags) when is_list(tags) do
+    get_metric(name, metric, Map.new(tags))
+  end
+
   def get_metric(name, metric, tags) do
-    case Peep.Persistent.storage(name) do
-      {storage_mod, storage} ->
-        storage_mod.get_metric(storage, metric, tags)
+    case Peep.Persistent.fetch(name) do
+      %Peep.Persistent{
+        storage: {storage_mod, storage},
+        metrics_to_ids: %{^metric => id}
+      } ->
+        storage_mod.get_metric(storage, id, metric, tags)
 
       _ ->
         nil
@@ -164,12 +178,85 @@ defmodule Peep do
     end
   end
 
+  def allow_metric?(%Telemetry.Metrics.Summary{} = metric) do
+    Logger.warning("The summary metric type is unsupported. Dropping #{inspect(metric.name)}")
+    false
+  end
+
+  def allow_metric?(%Telemetry.Metrics.Distribution{reporter_options: opts} = metric) do
+    key = :max_value
+
+    case Keyword.get(opts, key) do
+      nil ->
+        true
+
+      n when is_number(n) ->
+        true
+
+      _ ->
+        Logger.warning(
+          "Distributions must have a numeric value assigned to #{inspect(key)} in reporter_options. Dropping #{inspect(metric.name)}"
+        )
+
+        false
+    end
+  end
+
+  def allow_metric?(_) do
+    true
+  end
+
+  def assign_metric_ids(metrics) do
+    filtered_metrics = Enum.filter(metrics, &allow_metric?/1)
+
+    assign_metric_ids(
+      Enum.reverse(filtered_metrics),
+      %{},
+      %{},
+      %{},
+      length(filtered_metrics)
+    )
+  end
+
+  defp assign_metric_ids([], events_to_metrics, ids_to_metrics, metrics_to_ids, _counter) do
+    %{
+      events_to_metrics: events_to_metrics,
+      ids_to_metrics: ids_to_metrics,
+      metrics_to_ids: metrics_to_ids
+    }
+  end
+
+  defp assign_metric_ids([metric | rest], etm, itm, mti, counter) do
+    %{event_name: event_name} = metric
+
+    etm =
+      case etm do
+        %{^event_name => metrics} ->
+          %{etm | event_name => [{metric, counter} | metrics]}
+
+        _ ->
+          Map.put(etm, event_name, [{metric, counter}])
+      end
+
+    itm = Map.put(itm, counter, metric)
+    mti = Map.put(mti, metric, counter)
+
+    assign_metric_ids(rest, etm, itm, mti, counter - 1)
+  end
+
+  # callbacks
+
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
     name = options.name
-    metrics = options.metrics
-    handler_ids = EventHandler.attach(metrics, name, options.global_tags)
+
+    :ok =
+      Peep.Persistent.new(options)
+      |> Peep.Persistent.store()
+
+    :ok = Peep.Codegen.create(options)
+    handler_ids = EventHandler.attach(name)
 
     statsd_opts = options.statsd
     statsd_flush_interval = statsd_opts[:flush_interval_ms]
@@ -184,10 +271,6 @@ defmodule Peep do
       else
         nil
       end
-
-    :ok =
-      Peep.Persistent.new(options)
-      |> Peep.Persistent.store()
 
     state = %State{
       name: name,
@@ -228,9 +311,12 @@ defmodule Peep do
 
   @impl true
   def terminate(_reason, %{name: name, handler_ids: handler_ids}) do
+    Peep.Codegen.purge(name)
     Peep.Persistent.erase(name)
     EventHandler.detach(handler_ids)
   end
+
+  # private
 
   defp set_statsd_timer(interval) do
     Process.send_after(self(), :statsd_flush, interval)

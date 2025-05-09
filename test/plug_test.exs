@@ -4,8 +4,7 @@ defmodule PlugTest do
 
   import Telemetry.Metrics
 
-  @peep_worker :my_peep
-  @peep_worker_id :my_peep_id
+  alias Peep.Support.StorageCounter
 
   describe "init/1" do
     test "should raise an error if peep_worker is not provided" do
@@ -15,12 +14,12 @@ defmodule PlugTest do
     end
 
     test "should use the default path is one is not provided" do
-      assert %{metrics_path: "/metrics"} = Peep.Plug.init(peep_worker: @peep_worker)
+      assert %{metrics_path: "/metrics"} = Peep.Plug.init(peep_worker: :my_peep)
     end
 
     test "should return a map of all the settings if all are provided" do
-      assert %{metrics_path: "/my-metrics", peep_worker: @peep_worker} =
-               Peep.Plug.init(peep_worker: @peep_worker, path: "/my-metrics")
+      assert %{metrics_path: "/my-metrics", peep_worker: :my_peep} =
+               Peep.Plug.init(peep_worker: :my_peep, path: "/my-metrics")
     end
   end
 
@@ -28,9 +27,9 @@ defmodule PlugTest do
     setup [:setup_peep_worker]
 
     @tag :capture_log
-    test "returns 503 if the metrics worker has not started" do
-      stop_supervised!(@peep_worker_id)
-      opts = Peep.Plug.init(peep_worker: @peep_worker)
+    test "returns 503 if the metrics worker has not started", %{name: name} do
+      stop_supervised!(name)
+      opts = Peep.Plug.init(peep_worker: name)
       conn = conn(:get, "/metrics")
       response = Peep.Plug.call(conn, opts)
 
@@ -38,24 +37,24 @@ defmodule PlugTest do
       assert response.resp_body == "Service Unavailable"
     end
 
-    test "returns metrics if the worker is running at the default path" do
-      opts = Peep.Plug.init(peep_worker: @peep_worker)
+    test "returns metrics if the worker is running at the default path", %{name: name} do
+      opts = Peep.Plug.init(peep_worker: name)
       conn = conn(:get, "/metrics")
       response = Peep.Plug.call(conn, opts)
 
       assert response.status == 200
     end
 
-    test "returns metrics if the worker is running at a custom path" do
-      opts = Peep.Plug.init(peep_worker: @peep_worker, path: "/my-metrics")
+    test "returns metrics if the worker is running at a custom path", %{name: name} do
+      opts = Peep.Plug.init(peep_worker: name, path: "/my-metrics")
       conn = conn(:get, "/my-metrics")
       response = Peep.Plug.call(conn, opts)
 
       assert response.status == 200
     end
 
-    test "returns 400 for non-GET requests at metrics path" do
-      opts = Peep.Plug.init(peep_worker: @peep_worker)
+    test "returns 400 for non-GET requests at metrics path", %{name: name} do
+      opts = Peep.Plug.init(peep_worker: name)
 
       for method <- [:post, :put, :delete, :patch] do
         conn = conn(method, "/metrics")
@@ -65,16 +64,16 @@ defmodule PlugTest do
       end
     end
 
-    test "returns 404 for non-metrics paths" do
-      opts = Peep.Plug.init(peep_worker: @peep_worker, on_unmatched_path: :halt)
+    test "returns 404 for non-metrics paths", %{name: name} do
+      opts = Peep.Plug.init(peep_worker: name, on_unmatched_path: :halt)
       conn = conn(:get, "/not-metrics")
       response = Peep.Plug.call(conn, opts)
 
       assert response.status == 404
     end
 
-    test "does not halt for non-metrics paths by default" do
-      opts = Peep.Plug.init(peep_worker: @peep_worker)
+    test "does not halt for non-metrics paths by default", %{name: name} do
+      opts = Peep.Plug.init(peep_worker: name)
       conn = conn(:get, "/not-metrics")
       response = Peep.Plug.call(conn, opts)
 
@@ -112,11 +111,13 @@ defmodule PlugTest do
   end
 
   def setup_peep_worker(context) do
+    name = StorageCounter.fresh_id()
+
     start_supervised!(
-      {Peep, name: @peep_worker, metrics: [last_value("vm.memory.total", unit: :byte)]},
-      id: @peep_worker_id
+      {Peep, name: name, metrics: [last_value("vm.memory.total", unit: :byte)]},
+      id: name
     )
 
-    context
+    Map.put(context, :name, name)
   end
 end
