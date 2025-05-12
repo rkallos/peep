@@ -41,7 +41,7 @@ defmodule PeepTest do
   test "a worker with non-empty global_tags applies to all metrics" do
     name = :"#{__MODULE__}_global_tags"
 
-    tags = %{foo: "bar", baz: "quux"}
+    tags = %{foo: "bar", baz: "quux", service: "my-app", env: "production"}
     tag_keys = [:foo, :baz]
 
     counter = Metrics.counter("peep.counter", event_name: [:counter], tags: tag_keys)
@@ -139,5 +139,70 @@ defmodule PeepTest do
     GenServer.stop(pid, :shutdown)
 
     assert [] == :telemetry.list_handlers(prefix)
+  end
+
+  test "assign_ids" do
+    metrics =
+      [c, s, d, l] = [
+        Metrics.counter("one.two"),
+        Metrics.sum("one.two"),
+        Metrics.distribution("three.four"),
+        Metrics.last_value("five.six")
+      ]
+
+    expected_by_event = %{
+      [:one] => [{c, 1}, {s, 2}],
+      [:three] => [{d, 3}],
+      [:five] => [{l, 4}]
+    }
+
+    expected_by_id = %{1 => c, 2 => s, 3 => d, 4 => l}
+    expected_by_metric = %{c => 1, s => 2, d => 3, l => 4}
+
+    %{
+      events_to_metrics: actual_by_event,
+      ids_to_metrics: actual_by_id,
+      metrics_to_ids: actual_by_metric
+    } = Peep.assign_metric_ids(metrics)
+
+    assert actual_by_event == expected_by_event
+    assert actual_by_id == expected_by_id
+    assert actual_by_metric == expected_by_metric
+  end
+
+  test "Non-numeric values are dropped" do
+    name = :"#{__MODULE__}_non_numeric_values"
+
+    sum = Metrics.sum("#{name}.sum", event_name: [name, :sum], measurement: :value)
+
+    last_value =
+      Metrics.last_value("#{name}.last_value",
+        event_name: [name, :last_value],
+        measurement: :value
+      )
+
+    dist =
+      Metrics.distribution(
+        "#{name}.dist",
+        event_name: [name, :dist],
+        measurement: :value
+      )
+
+    metrics = [sum, last_value, dist]
+
+    options = [
+      name: name,
+      metrics: metrics
+    ]
+
+    {:ok, _pid} = Peep.start_link(options)
+
+    :telemetry.execute([name, :sum], %{value: :foo})
+    :telemetry.execute([name, :last_value], %{value: "bar"})
+    :telemetry.execute([name, :dist], %{value: []})
+
+    assert Peep.get_metric(name, sum, []) == 0
+    assert Peep.get_metric(name, last_value, []) == nil
+    assert Peep.get_metric(name, dist, []) == nil
   end
 end
