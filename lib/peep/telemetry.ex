@@ -19,4 +19,10 @@ defmodule Peep.Telemetry do
     metadata = %{reason: reason}
     :telemetry.execute([:peep, :packet, :error], measurements, metadata)
   end
+
+  def storage_size(sizes, name, mod) do
+    measurements = sizes
+    metadata = %{name: name, mod: mod}
+    :telemetry.execute([:peep, :storage], measurements, metadata)
+  end
 end
