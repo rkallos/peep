@@ -58,7 +58,7 @@ defmodule Peep.Options do
       default: %{},
       doc:
         "Additional tags published with every metric. " <>
-          "Global tags are overriden by the tags specified in the metric definition."
+          "Global tags are overridden by the tags specified in the metric definition."
     ],
     storage: [
       type: {:in, [:default, :striped]},
