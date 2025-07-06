@@ -5,6 +5,16 @@ defmodule BucketsTest do
     use Peep.Buckets.Custom, buckets: [3.14, 3.5, 4, 8, 15, 16, 23, 42, 50.5, 60]
   end
 
+  defmodule CustomBuckets2 do
+    use Peep.Buckets.Custom,
+      buckets: [
+        :timer.seconds(5),
+        :timer.minutes(1),
+        :timer.seconds(1),
+        :timer.seconds(10)
+      ]
+  end
+
   alias Telemetry.Metrics
 
   test "custom buckets #1" do
@@ -79,5 +89,20 @@ defmodule BucketsTest do
     assert 1 = module.bucket_for(1, %{})
     assert 2 = module.bucket_for(2, %{})
     assert 3 = module.bucket_for(3, %{})
+  end
+
+  test "code for buckets is evaluated" do
+    expected =
+      [
+        :timer.seconds(5),
+        :timer.minutes(1),
+        :timer.seconds(1),
+        :timer.seconds(10)
+      ]
+      |> :lists.usort()
+
+    for {bucket, idx} <- Enum.with_index(expected) do
+      assert CustomBuckets2.bucket_for(bucket - 1, %{}) == idx
+    end
   end
 end
