@@ -9,6 +9,12 @@ defmodule Peep.Buckets.Custom do
   defmacro __using__(opts) do
     buckets =
       Keyword.fetch!(opts, :buckets)
+      |> Enum.map(fn bucket ->
+        case bucket do
+          literal when is_number(bucket) -> literal
+          expr -> Code.eval_quoted(expr) |> elem(0)
+        end
+      end)
       |> :lists.usort()
 
     unless Enum.all?(buckets, &is_number/1) do
