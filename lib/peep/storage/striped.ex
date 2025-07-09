@@ -25,13 +25,17 @@ defmodule Peep.Storage.Striped do
     ]
 
     n_schedulers = :erlang.system_info(:schedulers_online)
-    Map.new(1..n_schedulers, fn i -> {i, :ets.new(__MODULE__, opts)} end)
+    List.to_tuple(Enum.map(1..n_schedulers, fn _ -> :ets.new(__MODULE__, opts) end))
   end
 
   @impl true
   def storage_size(tids) do
-    size = Enum.reduce(tids, 0, fn {_, tid}, acc -> acc + :ets.info(tid, :size) end)
-    memory = Enum.reduce(tids, 0, fn {_, tid}, acc -> acc + :ets.info(tid, :memory) end)
+    {size, memory} =
+      tids
+      |> Tuple.to_list()
+      |> Enum.reduce({0, 0}, fn tid, {size, memory} ->
+        {size + :ets.info(tid, :size), memory + :ets.info(tid, :memory)}
+      end)
 
     %{
       size: size,
@@ -90,15 +94,14 @@ defmodule Peep.Storage.Striped do
 
   defp get_tid(tids) do
     scheduler_id = :erlang.system_info(:scheduler_id)
-    %{^scheduler_id => tid} = tids
-    tid
+    elem(tids, scheduler_id - 1)
   end
 
   @impl true
   def get_metric(tids, id, %Metrics.Counter{}, tags) do
     key = {id, tags}
 
-    for tid <- Map.values(tids), reduce: 0 do
+    for tid <- Tuple.to_list(tids), reduce: 0 do
       acc ->
         case :ets.lookup(tid, key) do
           [] -> acc
@@ -110,7 +113,7 @@ defmodule Peep.Storage.Striped do
   def get_metric(tids, id, %Metrics.Sum{}, tags) do
     key = {id, tags}
 
-    for tid <- Map.values(tids), reduce: 0 do
+    for tid <- Tuple.to_list(tids), reduce: 0 do
       acc ->
         case :ets.lookup(tid, key) do
           [] -> acc
@@ -123,7 +126,7 @@ defmodule Peep.Storage.Striped do
     key = {id, tags}
 
     {_ts, value} =
-      for tid <- Map.values(tids), reduce: nil do
+      for tid <- Tuple.to_list(tids), reduce: nil do
         acc ->
           case :ets.lookup(tid, key) do
             [] ->
@@ -146,7 +149,7 @@ defmodule Peep.Storage.Striped do
 
     merge_fun = fn _k, v1, v2 -> v1 + v2 end
 
-    for tid <- Map.values(tids), reduce: nil do
+    for tid <- Tuple.to_list(tids), reduce: nil do
       acc ->
         case :ets.lookup(tid, key) do
           [] ->
@@ -176,7 +179,7 @@ defmodule Peep.Storage.Striped do
         }
       end)
 
-    for {_, tid} <- tids do
+    for tid <- Tuple.to_list(tids) do
       :ets.select_delete(tid, match_spec)
     end
 
@@ -185,7 +188,7 @@ defmodule Peep.Storage.Striped do
 
   @impl true
   def get_all_metrics(tids, %Peep.Persistent{ids_to_metrics: itm}) do
-    acc = get_all_metrics2(Map.values(tids), itm, %{})
+    acc = get_all_metrics2(Tuple.to_list(tids), itm, %{})
     remove_timestamps_from_last_values(acc)
   end
 
