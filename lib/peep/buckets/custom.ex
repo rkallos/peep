@@ -24,34 +24,18 @@ defmodule Peep.Buckets.Custom do
       @impl true
       def number_of_buckets(_), do: @number_of_buckets
 
+      @int_buckets unquote(__MODULE__).int_buckets(@buckets, nil, 0)
+      @number_of_int_buckets length(@int_buckets)
+      @float_buckets Enum.with_index(Enum.map(@buckets, &(&1 * 1.0)))
+      @number_of_float_buckets length(@float_buckets)
+
       @impl true
       def bucket_for(x, _) when is_integer(x) do
-        buckets = @buckets
-        int_buckets = int_buckets(buckets, nil, 0)
-
-        build_bucket_tree(int_buckets, length(int_buckets), @number_of_buckets, x)
+        build_bucket_tree(@int_buckets, @number_of_int_buckets, @number_of_buckets, x)
       end
 
       def bucket_for(x, _) when is_float(x) do
-        buckets = @buckets
-
-        float_buckets =
-          buckets
-          |> Enum.map(&(&1 * 1.0))
-          |> Enum.with_index()
-
-        build_bucket_tree(float_buckets, length(float_buckets), @number_of_buckets, x)
-      end
-
-      defp int_buckets([], _prev, _counter) do
-        []
-      end
-
-      defp int_buckets([curr | tail], prev, counter) do
-        case ceil(curr) do
-          ^prev -> int_buckets(tail, prev, counter + 1)
-          curr -> [{curr, counter} | int_buckets(tail, curr, counter + 1)]
-        end
+        build_bucket_tree(@float_buckets, @number_of_float_buckets, @number_of_buckets, x)
       end
 
       defp build_bucket_tree([{bound, lval}], 1, _rval, x) when x < bound, do: lval
@@ -87,6 +71,18 @@ defmodule Peep.Buckets.Custom do
       end
 
       def upper_bound(_, _), do: "+Inf"
+    end
+  end
+
+  @doc false
+  def int_buckets([], _prev, _counter) do
+    []
+  end
+
+  def int_buckets([curr | tail], prev, counter) do
+    case ceil(curr) do
+      ^prev -> int_buckets(tail, prev, counter + 1)
+      curr -> [{curr, counter} | int_buckets(tail, curr, counter + 1)]
     end
   end
 end
