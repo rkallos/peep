@@ -14,13 +14,15 @@ defmodule Peep.Buckets.Custom do
         raise ArgumentError, "expected buckets to be a list of numbers, got: #{@buckets}"
       end
 
+      @number_of_buckets length(@buckets)
+
       @behaviour Peep.Buckets
 
       @impl true
       def config(_), do: %{}
 
       @impl true
-      def number_of_buckets(_), do: length(@buckets)
+      def number_of_buckets(_), do: @number_of_buckets
 
       @impl true
       def bucket_for(x, _) when is_integer(x) do
