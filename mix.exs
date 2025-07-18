@@ -38,6 +38,7 @@ defmodule Peep.MixProject do
   defp deps do
     [
       {:nimble_options, "~> 1.1"},
+      {:telemetry, "~> 1.0"},
       {:telemetry_metrics, "~> 1.0"},
       # testing, docs, & linting
       {:bandit, "~> 1.6", only: [:test], runtime: false},

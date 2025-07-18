@@ -115,10 +115,15 @@ defmodule Peep do
   Returns measurements about the size of a running Peep's storage, in number of
   ETS elements and in bytes of memory.
   """
+  @spec storage_size(atom()) :: %{size: non_neg_integer(), memory: non_neg_integer()}
   def storage_size(name) do
     case Peep.Persistent.storage(name) do
       {storage_mod, storage} ->
-        storage_mod.storage_size(storage)
+        measurements = storage_mod.storage_size(storage)
+
+        Peep.Telemetry.storage_size(measurements, name, storage_mod)
+
+        measurements
 
       _ ->
         nil
