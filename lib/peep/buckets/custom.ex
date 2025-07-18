@@ -6,9 +6,11 @@ defmodule Peep.Buckets.Custom do
   For an example, look at the source of `Peep.Buckets.PowersOfTen`.
   """
 
-  defmacro __using__(buckets: buckets) do
+  defmacro __using__(opts) do
+    Module.put_attribute(__CALLER__.module, :buckets, Keyword.fetch!(opts, :buckets))
+
     quote do
-      @buckets :lists.usort(unquote(buckets))
+      @buckets :lists.usort(unquote(Module.get_attribute(__CALLER__.module, :buckets)))
 
       unless Enum.all?(@buckets, &is_number/1) do
         raise ArgumentError, "expected buckets to be a list of numbers, got: #{@buckets}"
