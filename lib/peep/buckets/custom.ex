@@ -26,41 +26,33 @@ defmodule Peep.Buckets.Custom do
       @impl true
       def number_of_buckets(_), do: @number_of_buckets
 
-      @int_buckets unquote(__MODULE__).int_buckets(@buckets, nil, 0)
-      @number_of_int_buckets length(@int_buckets)
-      @float_buckets Enum.with_index(Enum.map(@buckets, &(&1 * 1.0)))
-      @number_of_float_buckets length(@float_buckets)
+      @int_buckets unquote(__MODULE__).int_buckets(@buckets, nil, 1)
+      @float_buckets Enum.with_index(Enum.map(@buckets, &(&1 * 1.0)), 1)
+
+      @int_bucket_tree unquote(__MODULE__).build_bucket_tree(@int_buckets, length(@int_buckets))
+      @float_bucket_tree unquote(__MODULE__).build_bucket_tree(
+                           @float_buckets,
+                           length(@float_buckets)
+                         )
 
       @impl true
       def bucket_for(x, _) when is_integer(x) do
-        build_bucket_tree(@int_buckets, @number_of_int_buckets, @number_of_buckets, x)
+        lookup_in_tree(@int_bucket_tree, x, @number_of_buckets)
       end
 
       def bucket_for(x, _) when is_float(x) do
-        build_bucket_tree(@float_buckets, @number_of_float_buckets, @number_of_buckets, x)
+        lookup_in_tree(@float_bucket_tree, x, @number_of_buckets)
       end
 
-      defp build_bucket_tree([{bound, lval}], 1, _rval, x) when x < bound, do: lval
-      defp build_bucket_tree([{bound, _lval}], 1, rval, _x), do: rval
+      defp lookup_in_tree(nil, _key, rval), do: rval
 
-      defp build_bucket_tree([{lbound, lval}, {_rbound, _mval}], 2, rval, x) when x < lbound,
-        do: lval
+      defp lookup_in_tree({_left, {mid, bucket}, _right}, key, _rval) when key == mid,
+        do: bucket
 
-      defp build_bucket_tree([{_lbound, _lval}, {rbound, mval}], 2, _rval, x) when x < rbound,
-        do: mval
-
-      defp build_bucket_tree([{_lbound, _lval}, {_rbound, _mval}], 2, rval, _x), do: rval
-
-      defp build_bucket_tree(bounds, length, rval, x) do
-        llength = div(length, 2)
-        rlength = length - llength - 1
-
-        {lbounds, rbounds} = Enum.split(bounds, llength)
-        [{bound, lval} | rbounds] = rbounds
-
-        case x < bound do
-          true -> build_bucket_tree(lbounds, llength, lval, x)
-          false -> build_bucket_tree(rbounds, rlength, rval, x)
+      defp lookup_in_tree({left, {mid, bucket}, right}, key, rval) do
+        cond do
+          key > mid -> lookup_in_tree(right, key, rval)
+          key < mid -> lookup_in_tree(left, key, bucket - 1)
         end
       end
 
@@ -86,5 +78,22 @@ defmodule Peep.Buckets.Custom do
       ^prev -> int_buckets(tail, prev, counter + 1)
       curr -> [{curr, counter} | int_buckets(tail, curr, counter + 1)]
     end
+  end
+
+  @doc false
+  def build_bucket_tree([], 0), do: nil
+  def build_bucket_tree([bound], 1), do: {nil, bound, nil}
+
+  def build_bucket_tree([a | b], 2) do
+    {nil, a, build_bucket_tree(b, 1)}
+  end
+
+  def build_bucket_tree(bounds, length) do
+    llength = div(length, 2)
+    rlength = length - llength - 1
+    {left, right} = Enum.split(bounds, llength)
+    {[mid], right} = Enum.split(right, 1)
+
+    {build_bucket_tree(left, llength), mid, build_bucket_tree(right, rlength)}
   end
 end
