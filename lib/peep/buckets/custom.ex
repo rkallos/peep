@@ -29,7 +29,7 @@ defmodule Peep.Buckets.Custom do
         buckets = @buckets
         int_buckets = int_buckets(buckets, nil, 0)
 
-        build_bucket_tree(int_buckets, length(int_buckets), length(buckets), x)
+        build_bucket_tree(int_buckets, length(int_buckets), @number_of_buckets, x)
       end
 
       def bucket_for(x, _) when is_float(x) do
@@ -40,7 +40,7 @@ defmodule Peep.Buckets.Custom do
           |> Enum.map(&(&1 * 1.0))
           |> Enum.with_index()
 
-        build_bucket_tree(float_buckets, length(float_buckets), length(buckets), x)
+        build_bucket_tree(float_buckets, length(float_buckets), @number_of_buckets, x)
       end
 
       defp int_buckets([], _prev, _counter) do
