@@ -80,4 +80,19 @@ defmodule BucketsTest do
     assert 2 = module.bucket_for(2, %{})
     assert 3 = module.bucket_for(3, %{})
   end
+
+  test "allows passing `:timer` expressions" do
+    [{module, _binary}] =
+      quote do
+        defmodule TimerBuckets do
+          use Peep.Buckets.Custom, buckets: [:timer.seconds(1), :timer.seconds(2)]
+        end
+      end
+      |> Code.compile_quoted()
+
+    assert 2 = module.number_of_buckets(%{})
+    assert 0 = module.bucket_for(:timer.seconds(0), %{})
+    assert 1 = module.bucket_for(:timer.seconds(1), %{})
+    assert 2 = module.bucket_for(:timer.seconds(2), %{})
+  end
 end
