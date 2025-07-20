@@ -57,7 +57,7 @@ defmodule Peep.Codegen do
               keep: keep
             } = metric
 
-            if keep?(keep, metadata) do
+            if keep?(keep, metadata, measurement) do
               # credo:disable-for-next-line Credo.Check.Refactor.Nesting
               case fetch_measurement(measurement, measurements, metadata) do
                 value when is_number(value) ->
@@ -79,8 +79,11 @@ defmodule Peep.Codegen do
   # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defp other_funs_ast() do
     quote do
-      defp keep?(nil, _metadata), do: true
-      defp keep?(keep, metadata), do: keep.(metadata)
+      defp keep?(keep, metadata, measurement) when is_function(keep, 2),
+        do: keep.(metadata, measurement)
+
+      defp keep?(keep, metadata, _measurement) when is_function(keep, 1), do: keep.(metadata)
+      defp keep?(_keep, _metadata, _measurement), do: true
 
       defp fetch_measurement(%Telemetry.Metrics.Counter{}, _measurements, _metadata) do
         1
