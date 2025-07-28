@@ -11,7 +11,7 @@ defmodule Peep.Prometheus do
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum}
 
   def export(metrics) do
-    Enum.map(metrics, &format/1)
+    [Enum.map(metrics, &format/1), "# EOF\n"]
   end
 
   defp format({%Counter{}, _series} = metric) do
