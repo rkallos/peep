@@ -137,7 +137,7 @@ defmodule Peep.Prometheus do
 
   defp escape(<<?\", rest::binary>>, acc), do: escape(rest, <<acc::binary, ?\\, ?\">>)
   defp escape(<<?\\, rest::binary>>, acc), do: escape(rest, <<acc::binary, ?\\, ?\\>>)
-  defp escape(<<?\n, rest::binary>>, acc), do: escape(rest, <<acc::binary, ?\\, ?\n>>)
+  defp escape(<<?\n, rest::binary>>, acc), do: escape(rest, <<acc::binary, ?\\, ?n>>)
   defp escape(<<h, rest::binary>>, acc), do: escape(rest, <<acc::binary, h>>)
   defp escape(<<>>, acc), do: acc
 
@@ -148,7 +148,7 @@ defmodule Peep.Prometheus do
   end
 
   defp escape_help(<<?\\, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?\\>>)
-  defp escape_help(<<?\n, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?\n>>)
+  defp escape_help(<<?\n, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, ?\\, ?n>>)
   defp escape_help(<<h, rest::binary>>, acc), do: escape_help(rest, <<acc::binary, h>>)
   defp escape_help(<<>>, acc), do: acc
 
