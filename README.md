@@ -68,7 +68,7 @@ Peep package can be installed by adding `peep` to your list of dependencies in `
 ```elixir
 def deps do
   [
-    {:peep, "~> 3.3"}
+    {:peep, "~> 4.0"}
   ]
 end
 ```
