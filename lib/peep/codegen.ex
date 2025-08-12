@@ -58,6 +58,7 @@ defmodule Peep.Codegen do
             } = metric
 
             if keep?(keep, metadata) do
+              # credo:disable-for-next-line Credo.Check.Refactor.Nesting
               case fetch_measurement(measurement, measurements, metadata) do
                 value when is_number(value) ->
                   tag_values = tag_values.(metadata)
