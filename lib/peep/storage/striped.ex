@@ -10,7 +10,7 @@ defmodule Peep.Storage.Striped do
 
   @behaviour Peep.Storage
 
-  @typep tids() :: %{pos_integer() => :ets.tid()}
+  @typep tids() :: tuple()
 
   @compile :inline
 
