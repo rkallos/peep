@@ -7,62 +7,76 @@ defmodule Peep.Buckets.Custom do
   """
 
   defmacro __using__(opts) do
-    buckets =
-      Keyword.fetch!(opts, :buckets)
-      |> :lists.usort()
-
-    unless Enum.all?(buckets, &is_number/1) do
-      raise ArgumentError, "expected buckets to be a list of numbers, got: #{buckets}"
-    end
-
-    number_of_buckets = length(buckets)
-
-    quote do
+    quote bind_quoted: [buckets: Keyword.fetch!(opts, :buckets)] do
       @behaviour Peep.Buckets
+
+      require Peep.Buckets.Custom
+
+      buckets = :lists.usort(buckets)
+      len = length(buckets)
+
+      unless Enum.all?(buckets, &is_number/1) do
+        raise ArgumentError, "expected buckets to be a list of numbers, got: #{buckets}"
+      end
 
       @impl true
       def config(_), do: %{}
 
       @impl true
-      def number_of_buckets(_), do: unquote(number_of_buckets)
+      def number_of_buckets(_), do: unquote(len)
 
       @impl true
-      unquote(bucket_for_ast(buckets))
+
+      int_buckets =
+        buckets
+        |> Enum.map(&ceil/1)
+        |> Enum.with_index()
+        |> Enum.dedup_by(&elem(&1, 0))
+
+      float_buckets =
+        buckets
+        |> Enum.map(&(&1 * 1.0))
+        |> Enum.with_index()
+
+      if len <= 16 do
+        # For small bucket length it seems that the linear search is faster than
+        # binary search
+        for {top, idx} <- int_buckets do
+          def bucket_for(val, _) when is_integer(val) and val < unquote(top), do: unquote(idx)
+        end
+
+        for {top, idx} <- float_buckets do
+          def bucket_for(val, _) when is_float(val) and val < unquote(top), do: unquote(idx)
+        end
+
+        def bucket_for(_, _), do: unquote(len)
+      else
+        # For larger lists binary search still wins
+        def bucket_for(val, _) when is_integer(val) do
+          Peep.Buckets.Custom.build_tree(unquote(int_buckets), unquote(len), val)
+        end
+
+        def bucket_for(val, _) when is_float(val) do
+          Peep.Buckets.Custom.build_tree(unquote(float_buckets), unquote(len), val)
+        end
+      end
 
       @impl true
-      unquote(upper_bound_ast(buckets))
+      def upper_bound(_, _)
+
+      for {boundary, bucket_idx} <- Enum.with_index(buckets) do
+        def upper_bound(unquote(bucket_idx), _), do: unquote(to_string(boundary * 1.0))
+      end
+
+      def upper_bound(_, _), do: "+Inf"
     end
   end
 
   ## Bucket binary search
 
-  defp bucket_for_ast(buckets) do
-    int_buckets = int_buckets(buckets, nil, 0)
-
-    float_buckets =
-      buckets
-      |> Enum.map(&(&1 * 1.0))
-      |> Enum.with_index()
-
-    variable = Macro.var(:x, nil)
-
-    int_length = length(int_buckets)
-    int_tree = build_bucket_tree(int_buckets, int_length, length(buckets), variable)
-
-    float_length = length(float_buckets)
-    float_tree = build_bucket_tree(float_buckets, float_length, length(buckets), variable)
-
-    quote do
-      def bucket_for(unquote(variable), _) when is_integer(unquote(variable)) do
-        unquote(int_tree)
-      end
-
-      def bucket_for(unquote(variable), _) when is_float(unquote(variable)) do
-        unquote(float_tree)
-      end
-    end
-
-    # |> tap(&IO.puts(Code.format_string!(Macro.to_string(&1))))
+  @doc false
+  defmacro build_tree(buckets, overflow, var) do
+    build_bucket_tree(buckets, length(buckets), overflow, var)
   end
 
   defp build_bucket_tree([{bound, lval}], 1, rval, variable) do
@@ -108,38 +122,5 @@ defmodule Peep.Buckets.Custom do
           unquote(build_bucket_tree(rbounds, rlength, rval, variable))
       end
     end
-  end
-
-  defp int_buckets([], _prev, _counter) do
-    []
-  end
-
-  defp int_buckets([curr | tail], prev, counter) do
-    case ceil(curr) do
-      ^prev -> int_buckets(tail, prev, counter + 1)
-      curr -> [{curr, counter} | int_buckets(tail, curr, counter + 1)]
-    end
-  end
-
-  ## Upper bound
-
-  defp upper_bound_ast(buckets) do
-    bucket_defns =
-      for {boundary, bucket_idx} <- Enum.with_index(buckets) do
-        quote do
-          def upper_bound(unquote(bucket_idx), _), do: unquote(int_to_float_string(boundary))
-        end
-      end
-
-    final_defn =
-      quote do
-        def upper_bound(_, _), do: "+Inf"
-      end
-
-    bucket_defns ++ [final_defn]
-  end
-
-  defp int_to_float_string(int) do
-    to_string(int * 1.0)
   end
 end

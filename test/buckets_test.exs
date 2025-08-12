@@ -65,6 +65,48 @@ defmodule BucketsTest do
     assert_raise ArgumentError, fn -> Code.compile_quoted(ast) end
   end
 
+  test "buckets passed to `Peep.Buckets.Custom` can be values to be computed" do
+    ast =
+      quote do
+        defmodule CompTimeValues do
+          use Peep.Buckets.Custom,
+            buckets: [
+              :timer.seconds(1),
+              :timer.seconds(2),
+              :timer.seconds(5)
+            ]
+        end
+      end
+
+    assert Code.compile_quoted(ast)
+  end
+
+  test "whole list may be a set of computable values" do
+    ast =
+      quote do
+        defmodule CompTimeList do
+          use Peep.Buckets.Custom,
+            buckets: Enum.map(1..10, &:timer.seconds/1)
+        end
+      end
+
+    assert Code.compile_quoted(ast)
+  end
+
+  test "buckets can be read from variable" do
+    ast =
+      quote do
+        defmodule VariableList do
+          buckets = Enum.map(1..10, &:timer.seconds/1)
+
+          use Peep.Buckets.Custom,
+            buckets: buckets
+        end
+      end
+
+    assert Code.compile_quoted(ast)
+  end
+
   test "buckets passed to `use Peep.Buckets.Custom` are deduplicated" do
     [{module, _binary}] =
       quote do
