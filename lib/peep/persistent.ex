@@ -2,6 +2,8 @@ defmodule Peep.Persistent do
   @moduledoc false
   defstruct [:name, :storage, :events_to_metrics, :ids_to_metrics, :metrics_to_ids]
 
+  @compile {:inline, key: 1, fetch: 1}
+
   @type name() :: atom()
 
   @typep storage_default() :: {Peep.Storage.ETS, :ets.tid()}
@@ -74,6 +76,12 @@ defmodule Peep.Persistent do
 
       _ ->
         nil
+    end
+  end
+
+  defmacro fast_fetch(name) when is_atom(name) do
+    quote do
+      :persistent_term.get(unquote(key(name)), nil)
     end
   end
 

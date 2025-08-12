@@ -18,8 +18,11 @@ defmodule Peep.Codegen do
     module_ast =
       quote do
         defmodule unquote(module_name) do
+          require Persistent
+
+          @compile {:inline, global_tags: 0}
+
           def global_tags(), do: unquote(Macro.escape(global_tags))
-          def global_tags_keys(), do: unquote(Macro.escape(Map.keys(global_tags)))
           def name(), do: unquote(name)
 
           unquote(handle_event_ast)
@@ -39,33 +42,35 @@ defmodule Peep.Codegen do
     quote do
       def handle_event(event, measurements, metadata, _) do
         global_tags = global_tags()
-        global_tags_keys = global_tags_keys()
 
         %Persistent{
           events_to_metrics: %{^event => metrics},
           storage: {storage_mod, storage}
-        } = Persistent.fetch(unquote(peep_name))
+        } = Persistent.fast_fetch(unquote(peep_name))
 
-        for {metric, id} <- metrics do
-          %{
-            measurement: measurement,
-            tag_values: tag_values,
-            tags: tags,
-            keep: keep
-          } = metric
+        :lists.foreach(
+          fn {metric, id} ->
+            %{
+              measurement: measurement,
+              tag_values: tag_values,
+              tags: tags,
+              keep: keep
+            } = metric
 
-          case keep?(keep, metadata) && fetch_measurement(measurement, measurements, metadata) do
-            value when is_number(value) ->
-              tag_values = Map.merge(global_tags, tag_values.(metadata))
-              tags = Map.new(global_tags_keys ++ tags, &{&1, Map.get(tag_values, &1, "")})
-              storage_mod.insert_metric(storage, id, metric, value, tags)
+            if keep?(keep, metadata) do
+              case fetch_measurement(measurement, measurements, metadata) do
+                value when is_number(value) ->
+                  tag_values = tag_values.(metadata)
+                  tags = Map.merge(global_tags, Map.take(tag_values, tags))
+                  storage_mod.insert_metric(storage, id, metric, value, tags)
 
-            _ ->
-              nil
-          end
-        end
-
-        :ok
+                _ ->
+                  nil
+              end
+            end
+          end,
+          metrics
+        )
       end
     end
   end
