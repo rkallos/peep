@@ -352,13 +352,15 @@ defmodule PrometheusTest do
       Peep.insert_metric(name, counter, 1, %{atom: "\"string\""})
       Peep.insert_metric(name, counter, 1, %{"\"string\"" => :atom})
       Peep.insert_metric(name, counter, 1, %{"\"string\"" => "\"string\""})
+      Peep.insert_metric(name, counter, 1, %{"string" => "string\n"})
 
       expected = [
         "# HELP prometheus_test_counter a counter",
         "# TYPE prometheus_test_counter counter",
         ~s(prometheus_test_counter{atom="\\\"string\\\""} 1),
         ~s(prometheus_test_counter{\"string\"="atom"} 1),
-        ~s(prometheus_test_counter{\"string\"="\\\"string\\\""} 1)
+        ~s(prometheus_test_counter{\"string\"="\\\"string\\\""} 1),
+        ~s(prometheus_test_counter{string="string\\n"} 1)
       ]
 
       assert export(name) == lines_to_string(expected)
