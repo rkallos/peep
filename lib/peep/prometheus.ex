@@ -131,8 +131,16 @@ defmodule Peep.Prometheus do
 
   defp escape(value) do
     value
-    |> to_string()
+    |> safe_to_string()
     |> escape(<<>>)
+  end
+
+  defp safe_to_string(value) do
+    try do
+      to_string(value)
+    rescue
+      Protocol.UndefinedError -> inspect(value)
+    end
   end
 
   defp escape(<<?\", rest::binary>>, acc), do: escape(rest, <<acc::binary, ?\\, ?\">>)

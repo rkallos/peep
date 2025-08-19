@@ -6,6 +6,11 @@ defmodule PrometheusTest do
 
   alias Peep.Support.StorageCounter
 
+  # Test struct that doesn't implement String.Chars
+  defmodule TestError do
+    defstruct [:reason, :code]
+  end
+
   @impls [:default, :striped]
 
   for impl <- @impls do
@@ -364,6 +369,36 @@ defmodule PrometheusTest do
       ]
 
       assert export(name) == lines_to_string(expected)
+    end
+
+    test "#{impl} - regression: handle structs without String.Chars" do
+      name = StorageCounter.fresh_id()
+
+      counter =
+        Metrics.counter(
+          "prometheus.test.counter",
+          description: "a counter"
+        )
+
+      opts = [
+        name: name,
+        metrics: [counter],
+        storage: unquote(impl)
+      ]
+
+      {:ok, _pid} = Peep.start_link(opts)
+
+      # Create a struct that doesn't implement String.Chars
+      error_struct = %TestError{reason: :tcp_closed, code: 1001}
+
+      Peep.insert_metric(name, counter, 1, %{error: error_struct})
+
+      result = export(name)
+
+      # Should not crash and should contain the inspected struct representation
+      assert result =~ "prometheus_test_counter"
+      assert result =~ "TestError"
+      assert result =~ "tcp_closed"
     end
   end
 
