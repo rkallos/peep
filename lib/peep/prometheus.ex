@@ -136,10 +136,9 @@ defmodule Peep.Prometheus do
   end
 
   defp safe_to_string(value) do
-    try do
-      to_string(value)
-    rescue
-      Protocol.UndefinedError -> inspect(value)
+    case String.Chars.impl_for(value) do
+      nil -> inspect(value)
+      _ -> to_string(value)
     end
   end
 
