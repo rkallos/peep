@@ -131,8 +131,15 @@ defmodule Peep.Prometheus do
 
   defp escape(value) do
     value
-    |> to_string()
+    |> safe_to_string()
     |> escape(<<>>)
+  end
+
+  defp safe_to_string(value) do
+    case String.Chars.impl_for(value) do
+      nil -> inspect(value)
+      _ -> to_string(value)
+    end
   end
 
   defp escape(<<?\", rest::binary>>, acc), do: escape(rest, <<acc::binary, ?\\, ?\">>)
