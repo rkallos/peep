@@ -9,7 +9,7 @@ defmodule Peep.Storage do
   @doc """
   Creates a new term representing a Peep storage backend.
   """
-  @callback new() :: term()
+  @callback new(term) :: term()
 
   @doc """
   Calculates the amount of memory used by a Peep storage backend.

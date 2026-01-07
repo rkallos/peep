@@ -3,13 +3,14 @@ defmodule Storage.Test do
 
   alias Telemetry.Metrics
 
-  @impls [Peep.Storage.ETS, Peep.Storage.Striped]
+  @impls [Peep.Storage.ETS, Peep.Storage.Striped, {CustomStorage, 3}]
 
   defp storage_to_option(Peep.Storage.ETS), do: :default
   defp storage_to_option(Peep.Storage.Striped), do: :striped
+  defp storage_to_option(term), do: term
 
   for impl <- @impls do
-    test "#{impl} - a counter can be stored and retrieved" do
+    test "#{inspect(impl)} - a counter can be stored and retrieved" do
       counter = Metrics.counter("storage.test.counter")
 
       name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [counter])
@@ -30,7 +31,7 @@ defmodule Storage.Test do
       assert Peep.get_metric(name, counter, %{even: true}) == 500
     end
 
-    test "#{impl} - a sum can be stored and retrieved" do
+    test "#{inspect(impl)} - a sum can be stored and retrieved" do
       sum = Metrics.sum("storage.test.sum")
 
       name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [sum])
@@ -51,7 +52,7 @@ defmodule Storage.Test do
       assert Peep.get_metric(name, sum, even: true) == 100 * 15
     end
 
-    test "#{impl} - a last_value can be stored and retrieved" do
+    test "#{inspect(impl)} - a last_value can be stored and retrieved" do
       last_value = Metrics.last_value("storage.test.gauge")
 
       name = start_peep!(storage: storage_to_option(unquote(impl)), metrics: [last_value])
@@ -72,7 +73,7 @@ defmodule Storage.Test do
       assert Peep.get_metric(name, last_value, odd: true) == 9
     end
 
-    test "#{impl} - a distribution can be stored and retrieved" do
+    test "#{inspect(impl)} - a distribution can be stored and retrieved" do
       dist =
         Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
 
@@ -130,7 +131,7 @@ defmodule Storage.Test do
       assert Peep.get_metric(name, dist, []) == expected
     end
 
-    test "#{impl} - distribution bucket variability" do
+    test "#{inspect(impl)} - distribution bucket variability" do
       dist =
         Metrics.distribution("storage.test.distribution",
           reporter_options: [
@@ -172,7 +173,7 @@ defmodule Storage.Test do
       assert Peep.get_metric(name, dist, []) == expected
     end
 
-    test "#{impl} - default distribution handles negative values" do
+    test "#{inspect(impl)} - default distribution handles negative values" do
       dist =
         Metrics.distribution("storage.test.distribution",
           reporter_options: [
@@ -213,7 +214,7 @@ defmodule Storage.Test do
       assert Peep.get_metric(name, dist, []) == expected
     end
 
-    test "#{impl} - storage_size/1" do
+    test "#{inspect(impl)} - storage_size/1" do
       counter = Metrics.counter("storage.test.counter")
       sum = Metrics.sum("storage.test.sum")
       last_value = Metrics.last_value("storage.test.gauge")
@@ -241,7 +242,7 @@ defmodule Storage.Test do
       end
     end
 
-    test "#{impl} - prune tags" do
+    test "#{inspect(impl)} - prune tags" do
       counter = Metrics.counter("storage.test.counter")
       sum = Metrics.sum("storage.test.sum")
       last_value = Metrics.last_value("storage.test.gauge")
