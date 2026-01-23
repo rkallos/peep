@@ -14,9 +14,9 @@ defmodule Peep.Storage.Striped do
 
   @compile :inline
 
-  @spec new() :: tids()
+  @spec new(term) :: tids()
   @impl true
-  def new() do
+  def new(_) do
     opts = [
       :public,
       read_concurrency: false,

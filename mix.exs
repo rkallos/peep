@@ -78,7 +78,8 @@ defmodule Peep.MixProject do
     [
       maintainers: ["Richard Kallos", "Fabien Lamarche-Filion"],
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => "https://github.com/rkallos/peep"}
+      links: %{"GitHub" => "https://github.com/rkallos/peep"},
+      files: ~w(lib test/shared LICENSE mix.exs README.md)
     ]
   end
 end

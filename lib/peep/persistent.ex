@@ -6,9 +6,7 @@ defmodule Peep.Persistent do
 
   @type name() :: atom()
 
-  @typep storage_default() :: {Peep.Storage.ETS, :ets.tid()}
-  @typep storage_striped() :: {Peep.Storage.Striped, tuple()}
-  @typep storage() :: storage_default() | storage_striped()
+  @typep storage() :: {module, term()}
   @typep events_to_metrics() :: %{
            :telemetry.event_name() => [{Telemetry.Metrics.t(), non_neg_integer()}]
          }
@@ -30,10 +28,13 @@ defmodule Peep.Persistent do
     storage =
       case storage_impl do
         :default ->
-          {Peep.Storage.ETS, Peep.Storage.ETS.new()}
+          {Peep.Storage.ETS, Peep.Storage.ETS.new([])}
 
         :striped ->
-          {Peep.Storage.Striped, Peep.Storage.Striped.new()}
+          {Peep.Storage.Striped, Peep.Storage.Striped.new([])}
+
+        {mod, opts} when is_atom(mod) ->
+          {mod, mod.new(opts)}
       end
 
     %{

@@ -12,9 +12,9 @@ defmodule Peep.Storage.ETS do
 
   @behaviour Peep.Storage
 
-  @spec new() :: :ets.tid()
+  @spec new(term) :: :ets.tid()
   @impl true
-  def new() do
+  def new(_) do
     opts = [
       :public,
       # Enabling read_concurrency makes switching between reads and writes
