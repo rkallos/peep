@@ -1,7 +1,7 @@
 defmodule Peep.MixProject do
   use Mix.Project
 
-  @version "4.2.1"
+  @version "4.3.0"
 
   def project do
     [
