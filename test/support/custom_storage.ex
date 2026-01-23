@@ -159,13 +159,7 @@ defmodule CustomStorage do
     |> Tuple.to_list()
     |> Enum.each(fn agent ->
       Agent.update(agent, fn state ->
-        Enum.reduce(state, state, fn {key, _value}, acc ->
-          if should_prune?(key, patterns) do
-            Map.delete(acc, key)
-          else
-            acc
-          end
-        end)
+        prune_agent_state(state, patterns)
       end)
     end)
 
@@ -178,6 +172,16 @@ defmodule CustomStorage do
     size = tuple_size(agents)
     index = :rand.uniform(size) - 1
     elem(agents, index)
+  end
+
+  defp prune_agent_state(state, patterns) do
+    Enum.reduce(state, state, fn {key, _value}, acc ->
+      if should_prune?(key, patterns) do
+        Map.delete(acc, key)
+      else
+        acc
+      end
+    end)
   end
 
   defp should_prune?({_id, tags}, patterns) when is_map(tags) do
