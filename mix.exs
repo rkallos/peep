@@ -1,7 +1,7 @@
 defmodule Peep.MixProject do
   use Mix.Project
 
-  @version "4.3.0"
+  @version "4.3.1"
 
   def project do
     [
@@ -79,7 +79,8 @@ defmodule Peep.MixProject do
       maintainers: ["Richard Kallos", "Fabien Lamarche-Filion"],
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/rkallos/peep"},
-      files: ~w(lib test/shared LICENSE mix.exs README.md)
+      files: ~w(lib priv .formatter.exs mix.exs README* readme* LICENSE* license*
+      CHANGELOG* changelog* src c_src Makefile* test/shared)
     ]
   end
 end
