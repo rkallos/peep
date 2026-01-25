@@ -86,6 +86,7 @@ defmodule Peep.Statsd do
           %__MODULE__{state | statsd_opts: new_opts}
 
         {:error, _reason} ->
+          :gen_udp.close(socket)
           %__MODULE__{state | socket: nil}
       end
 
