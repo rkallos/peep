@@ -62,3 +62,6 @@ jobs:
 
       - name: Run credo
         run: mix credo
+
+      - name: Test hex package compilation
+        run: elixir test/integration/hex_package_test.exs
