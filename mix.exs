@@ -14,7 +14,10 @@ defmodule Peep.MixProject do
       docs: docs(),
       description: description(),
       package: package(),
-      elixirc_paths: elixirc_paths(Mix.env())
+      elixirc_paths: elixirc_paths(Mix.env()),
+      test_ignore_filters: [
+        ~r"test/integration/"
+      ]
     ]
   end
 
