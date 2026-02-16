@@ -68,8 +68,13 @@ defmodule Peep do
     values are already precomputed, for example presummed socket stats.
   """
   use GenServer
+
   require Logger
-  alias Peep.{EventHandler, Options, Statsd}
+  require Peep.Persistent
+
+  alias Peep.EventHandler
+  alias Peep.Options
+  alias Peep.Statsd
 
   defmodule State do
     @moduledoc false
@@ -98,10 +103,10 @@ defmodule Peep do
 
   def insert_metric(name, metric, value, tags) when is_number(value) do
     case Peep.Persistent.fetch(name) do
-      %Peep.Persistent{
+      Peep.Persistent.persistent(
         storage: {storage_mod, storage},
         metrics_to_ids: %{^metric => id}
-      } ->
+      ) ->
         storage_mod.insert_metric(storage, id, metric, value, tags)
 
       _ ->
@@ -136,7 +141,7 @@ defmodule Peep do
   """
   def get_all_metrics(name) do
     case Peep.Persistent.fetch(name) do
-      %Peep.Persistent{storage: {storage_mod, storage}} = p ->
+      Peep.Persistent.persistent(storage: {storage_mod, storage}) = p ->
         storage_mod.get_all_metrics(storage, p)
 
       _ ->
@@ -153,10 +158,10 @@ defmodule Peep do
 
   def get_metric(name, metric, tags) do
     case Peep.Persistent.fetch(name) do
-      %Peep.Persistent{
+      Peep.Persistent.persistent(
         storage: {storage_mod, storage},
         metrics_to_ids: %{^metric => id}
-      } ->
+      ) ->
         storage_mod.get_metric(storage, id, metric, tags)
 
       _ ->
