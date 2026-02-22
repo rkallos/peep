@@ -141,12 +141,25 @@ defmodule Peep do
   """
   def get_all_metrics(name) do
     case Peep.Persistent.fetch(name) do
-      Peep.Persistent.persistent(storage: {storage_mod, storage}) = p ->
+      Peep.Persistent.persistent(storage: {storage_mod, storage}, global_tags: global_tags) = p ->
         storage_mod.get_all_metrics(storage, p)
+        |> extend_with(global_tags)
 
       _ ->
         nil
     end
+  end
+
+  defp extend_with(metrics, tags) when tags == %{}, do: metrics
+
+  defp extend_with(metrics, global_tags) do
+    Map.new(metrics, fn {metric, measurements} ->
+      updated = Map.new(measurements, fn {tags, val} ->
+        {Map.merge(global_tags, tags), val}
+      end)
+
+      {metric, updated}
+    end)
   end
 
   @doc """
@@ -245,7 +258,6 @@ defmodule Peep do
       Peep.Persistent.new(options)
       |> Peep.Persistent.store()
 
-    :ok = Peep.Codegen.create(options)
     handler_ids = EventHandler.attach(name)
 
     statsd_opts = options.statsd
@@ -301,7 +313,6 @@ defmodule Peep do
 
   @impl true
   def terminate(_reason, %{name: name, handler_ids: handler_ids}) do
-    Peep.Codegen.purge(name)
     Peep.Persistent.erase(name)
     EventHandler.detach(handler_ids)
   end

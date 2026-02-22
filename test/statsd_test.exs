@@ -9,6 +9,50 @@ defmodule StatsdTest do
   @impls [:default, :striped]
 
   for impl <- @impls do
+    describe "#{impl} - global metadata" do
+      test "is present in formatted output" do
+        counter = Metrics.counter("statsd.test.counter", description: "a counter")
+        name = StorageCounter.fresh_id()
+
+        opts = [
+          name: name,
+          metrics: [counter],
+          storage: unquote(impl),
+          global_tags: %{foo: :bar}
+        ]
+
+        {:ok, _pid} = Peep.start_link(opts)
+
+        for _ <- 1..10 do
+          Peep.insert_metric(name, counter, 1, %{bar: "quuz"})
+        end
+
+        expected = ["statsd.test.counter:10|c|#foo:bar,bar:quuz"]
+        assert parse_packets(get_statsd_packets(name)) == parse_packets(expected)
+      end
+
+      test "can be overridden by event metadata" do
+        counter = Metrics.counter("statsd.test.counter", description: "a counter")
+        name = StorageCounter.fresh_id()
+
+        opts = [
+          name: name,
+          metrics: [counter],
+          storage: unquote(impl),
+          global_tags: %{foo: :bar}
+        ]
+
+        {:ok, _pid} = Peep.start_link(opts)
+
+        for _ <- 1..10 do
+          Peep.insert_metric(name, counter, 1, %{foo: 2137, bar: "quuz"})
+        end
+
+        expected = ["statsd.test.counter:10|c|#foo:2137,bar:quuz"]
+        assert parse_packets(get_statsd_packets(name)) == parse_packets(expected)
+      end
+    end
+
     test "#{impl} - a counter can be formatted" do
       name = StorageCounter.fresh_id()
 

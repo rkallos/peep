@@ -14,6 +14,56 @@ defmodule PrometheusTest do
   @impls [:default, :striped]
 
   for impl <- @impls do
+    describe "#{impl} - global metadata" do
+      test "is present in formatted output" do
+        counter = Metrics.counter("prometheus.test.counter", description: "a counter")
+        name = StorageCounter.fresh_id()
+
+        opts = [
+          name: name,
+          metrics: [counter],
+          storage: unquote(impl),
+          global_tags: %{foo: :bar}
+        ]
+
+        {:ok, _pid} = Peep.start_link(opts)
+
+        Peep.insert_metric(name, counter, 1, %{baz: "quux"})
+
+        expected = [
+          "# HELP prometheus_test_counter a counter",
+          "# TYPE prometheus_test_counter counter",
+          ~s(prometheus_test_counter{baz="quux",foo="bar"} 1)
+        ]
+
+        assert export(name) == lines_to_string(expected)
+      end
+
+      test "can be overridden by event metadata" do
+        counter = Metrics.counter("prometheus.test.counter", description: "a counter")
+        name = StorageCounter.fresh_id()
+
+        opts = [
+          name: name,
+          metrics: [counter],
+          storage: unquote(impl),
+          global_tags: %{foo: :bar}
+        ]
+
+        {:ok, _pid} = Peep.start_link(opts)
+
+        Peep.insert_metric(name, counter, 1, %{foo: 2137, baz: "quux"})
+
+        expected = [
+          "# HELP prometheus_test_counter a counter",
+          "# TYPE prometheus_test_counter counter",
+          ~s(prometheus_test_counter{baz="quux",foo="2137"} 1)
+        ]
+
+        assert export(name) == lines_to_string(expected)
+      end
+    end
+
     test "#{impl} - counter formatting" do
       counter = Metrics.counter("prometheus.test.counter", description: "a counter")
       name = StorageCounter.fresh_id()
