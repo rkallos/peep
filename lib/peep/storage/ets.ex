@@ -7,6 +7,9 @@ defmodule Peep.Storage.ETS do
   consider switching to `Peep.Storage.Striped`, which reduces lock contention
   at the cost of higher memory usage.
   """
+
+  require Peep.Storage.Atomics
+
   alias Peep.Storage
   alias Telemetry.Metrics
 
@@ -81,9 +84,9 @@ defmodule Peep.Storage.ETS do
   end
 
   @impl true
-  def get_all_metrics(tid, %Peep.Persistent{ids_to_metrics: itm}) do
+  def get_all_metrics(tid, persistent) do
     :ets.tab2list(tid)
-    |> group_metrics(itm, %{})
+    |> group_metrics(Peep.Persistent.ids_to_metrics(persistent), %{})
   end
 
   @impl true
@@ -153,7 +156,7 @@ defmodule Peep.Storage.ETS do
     update_in(acc, [Access.key(metric, %{}), Access.key(tags, 0)], &(&1 + value))
   end
 
-  defp group_metric({{id, tags}, %Storage.Atomics{} = atomics}, itm, acc) do
+  defp group_metric({{id, tags}, Storage.Atomics.atomic() = atomics}, itm, acc) do
     %{^id => metric} = itm
     put_in(acc, [Access.key(metric, %{}), Access.key(tags)], Storage.Atomics.values(atomics))
   end

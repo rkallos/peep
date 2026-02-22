@@ -2,7 +2,6 @@ defmodule Peep.Codegen do
   @moduledoc false
 
   alias Peep.Options
-  alias Peep.Persistent
 
   def module(peep_name) do
     :"Peep.Codegen.#{peep_name}"
@@ -18,7 +17,7 @@ defmodule Peep.Codegen do
     module_ast =
       quote do
         defmodule unquote(module_name) do
-          require Persistent
+          import Peep.Persistent, only: [fast_fetch: 1, persistent: 1]
 
           @compile {:inline, global_tags: 0}
 
@@ -43,10 +42,10 @@ defmodule Peep.Codegen do
       def handle_event(event, measurements, metadata, _) do
         global_tags = global_tags()
 
-        %Persistent{
+        persistent(
           events_to_metrics: %{^event => metrics},
           storage: {storage_mod, storage}
-        } = Persistent.fast_fetch(unquote(peep_name))
+        ) = fast_fetch(unquote(peep_name))
 
         :lists.foreach(
           fn {metric, id} ->

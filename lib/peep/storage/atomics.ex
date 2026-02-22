@@ -1,13 +1,15 @@
 defmodule Peep.Storage.Atomics do
   @moduledoc false
 
-  defstruct [
+  require Record
+
+  Record.defrecord(:atomic, [
     :num_buckets,
     :buckets,
     :sum,
     :above_max,
     :bucket_calculator
-  ]
+  ])
 
   def new(%Telemetry.Metrics.Distribution{} = metric) do
     {bucket_calculator, config} = Peep.Buckets.config(metric)
@@ -16,23 +18,23 @@ defmodule Peep.Storage.Atomics do
     sum = :atomics.new(1, signed: true)
     above_max = :atomics.new(1, signed: false)
 
-    %__MODULE__{
+    atomic(
       num_buckets: num_buckets,
       buckets: buckets,
       sum: sum,
       above_max: above_max,
       bucket_calculator: {bucket_calculator, config}
-    }
+    )
   end
 
   def insert(
-        %__MODULE__{
+        atomic(
           bucket_calculator: {module, config},
           buckets: buckets,
           sum: sum,
           num_buckets: num_buckets,
           above_max: above_max
-        },
+        ),
         value
       ) do
     # :atomics indexes are 1-based.
@@ -50,13 +52,15 @@ defmodule Peep.Storage.Atomics do
     :atomics.add(sum, 1, round(value))
   end
 
-  def values(%__MODULE__{
-        bucket_calculator: {module, config},
-        buckets: buckets,
-        sum: sum,
-        above_max: above_max,
-        num_buckets: num_buckets
-      }) do
+  def values(
+        atomic(
+          bucket_calculator: {module, config},
+          buckets: buckets,
+          sum: sum,
+          above_max: above_max,
+          num_buckets: num_buckets
+        )
+      ) do
     map =
       for idx <- 1..num_buckets, into: %{} do
         {module.upper_bound(idx - 1, config), :atomics.get(buckets, idx)}
