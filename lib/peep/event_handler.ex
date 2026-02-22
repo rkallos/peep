@@ -15,7 +15,7 @@ defmodule Peep.EventHandler do
           handler_id,
           event_name,
           &module.handle_event/4,
-          nil
+          []
         )
 
       handler_id
