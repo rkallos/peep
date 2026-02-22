@@ -1,7 +1,7 @@
 defmodule PlugTest do
   use ExUnit.Case, async: false
-  use Plug.Test
 
+  import Plug.Test
   import Telemetry.Metrics
 
   alias Peep.Support.StorageCounter
