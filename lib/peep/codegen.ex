@@ -48,30 +48,35 @@ defmodule Peep.Codegen do
           storage: {storage_mod, storage}
         } = Persistent.fast_fetch(unquote(peep_name))
 
-        :lists.foreach(
-          fn {metric, id} ->
-            %{
-              measurement: measurement,
-              tag_values: tag_values,
-              tags: tags,
-              keep: keep
-            } = metric
+        insert_metrics(metrics, storage_mod, storage, global_tags, measurements, metadata)
+      end
 
-            if keep?(keep, metadata, measurement) do
-              # credo:disable-for-next-line Credo.Check.Refactor.Nesting
-              case fetch_measurement(measurement, measurements, metadata) do
-                value when is_number(value) ->
-                  tag_values = tag_values.(metadata)
-                  tags = Map.merge(global_tags, Map.take(tag_values, tags))
-                  storage_mod.insert_metric(storage, id, metric, value, tags)
+      defp insert_metrics([], _, _, _, _, _), do: :ok
 
-                _ ->
-                  nil
-              end
-            end
-          end,
-          metrics
-        )
+      defp insert_metrics(
+             [{metric, id} | metrics],
+             storage_mod,
+             storage,
+             global_tags,
+             measurements,
+             metadata
+           ) do
+        %{measurement: measurement, keep: keep} = metric
+
+        if keep?(keep, metadata, measurement) do
+          case fetch_measurement(measurement, measurements, metadata) do
+            value when is_number(value) ->
+              %{tags: tags, tag_values: tag_values} = metric
+              tag_values = tag_values.(metadata)
+              tags = Map.merge(global_tags, Map.take(tag_values, tags))
+              storage_mod.insert_metric(storage, id, metric, value, tags)
+
+            _ ->
+              nil
+          end
+        end
+
+        insert_metrics(metrics, storage_mod, storage, global_tags, measurements, metadata)
       end
     end
   end
@@ -79,34 +84,34 @@ defmodule Peep.Codegen do
   # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defp other_funs_ast() do
     quote do
-      defp keep?(keep, metadata, measurement) when is_function(keep, 2),
-        do: keep.(metadata, measurement)
+      defp keep?(keep, metadata, measurement) when is_function(keep, 2) do
+        keep.(metadata, measurement)
+      end
 
-      defp keep?(keep, metadata, _measurement) when is_function(keep, 1), do: keep.(metadata)
+      defp keep?(keep, metadata, _measurement) when is_function(keep, 1) do
+        keep.(metadata)
+      end
+
       defp keep?(_keep, _metadata, _measurement), do: true
 
       defp fetch_measurement(%Telemetry.Metrics.Counter{}, _measurements, _metadata) do
         1
       end
 
-      defp fetch_measurement(measurement, measurements, metadata) do
-        case measurement do
-          nil ->
-            nil
+      defp fetch_measurement(nil, _, _), do: nil
 
-          fun when is_function(fun, 1) ->
-            fun.(measurements)
+      defp fetch_measurement(fun, measurements, _) when is_function(fun, 1) do
+        fun.(measurements)
+      end
 
-          fun when is_function(fun, 2) ->
-            fun.(measurements, metadata)
+      defp fetch_measurement(fun, measurements, metadata) when is_function(fun, 2) do
+        fun.(measurements, metadata)
+      end
 
-          key ->
-            case measurements do
-              %{^key => nil} -> 1
-              %{^key => false} -> 1
-              %{^key => value} -> value
-              _ -> 1
-            end
+      defp fetch_measurement(key, measurements, _) do
+        case measurements do
+          %{^key => value} -> value
+          _ -> 1
         end
       end
     end
