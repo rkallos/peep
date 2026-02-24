@@ -1,6 +1,15 @@
 defmodule Peep.Persistent do
   @moduledoc false
-  defstruct [:name, :storage, :events_to_metrics, :ids_to_metrics, :metrics_to_ids]
+
+  require Record
+
+  Record.defrecord(:persistent, [
+    :name,
+    :storage,
+    events_to_metrics: %{},
+    ids_to_metrics: %{},
+    metrics_to_ids: %{}
+  ])
 
   @compile {:inline, key: 1, fetch: 1}
 
@@ -10,16 +19,17 @@ defmodule Peep.Persistent do
   @typep events_to_metrics() :: %{
            :telemetry.event_name() => [{Telemetry.Metrics.t(), non_neg_integer()}]
          }
-  @typep ids_to_metrics :: %{Peep.metric_id() => Telemetry.Metrics.t()}
-  @typep metrics_to_ids :: %{Telemetry.Metrics.t() => Peep.metric_id()}
+  @typep metrics_to_ids() :: %{Telemetry.Metrics.t() => Peep.metric_id()}
 
-  @type t() :: %__MODULE__{
-          name: name(),
-          storage: storage(),
-          events_to_metrics: events_to_metrics(),
-          ids_to_metrics: ids_to_metrics(),
-          metrics_to_ids: metrics_to_ids()
-        }
+  @type ids_to_metrics() :: %{Peep.metric_id() => Telemetry.Metrics.t()}
+  @type t() ::
+          record(:persistent,
+            name: name(),
+            storage: storage(),
+            events_to_metrics: events_to_metrics(),
+            ids_to_metrics: ids_to_metrics(),
+            metrics_to_ids: metrics_to_ids()
+          )
 
   @spec new(Peep.Options.t()) :: t()
   def new(%Peep.Options{} = options) do
@@ -43,18 +53,18 @@ defmodule Peep.Persistent do
       metrics_to_ids: metrics_to_ids
     } = Peep.assign_metric_ids(metrics)
 
-    %__MODULE__{
+    persistent(
       name: name,
       storage: storage,
       events_to_metrics: events_to_metrics,
       ids_to_metrics: ids_to_metrics,
       metrics_to_ids: metrics_to_ids
-    }
+    )
   end
 
   @spec store(t()) :: :ok
-  def store(%__MODULE__{} = term) do
-    %__MODULE__{name: name} = term
+  def store(persistent() = term) do
+    persistent(name: name) = term
     :persistent_term.put(key(name), term)
   end
 
@@ -72,13 +82,16 @@ defmodule Peep.Persistent do
   @spec storage(name()) :: {module(), term()} | nil
   def storage(name) when is_atom(name) do
     case fetch(name) do
-      %__MODULE__{storage: s} ->
+      persistent(storage: s) ->
         s
 
       _ ->
         nil
     end
   end
+
+  @spec ids_to_metrics(t()) :: ids_to_metrics()
+  def ids_to_metrics(persistent(ids_to_metrics: itm)), do: itm
 
   defmacro fast_fetch(name) when is_atom(name) do
     quote do

@@ -3,8 +3,10 @@ defmodule Peep.EventHandler do
 
   @compile :inline
 
+  import Peep.Persistent, only: [persistent: 1]
+
   def attach(name) do
-    %Peep.Persistent{events_to_metrics: metrics_by_event} = Peep.Persistent.fetch(name)
+    persistent(events_to_metrics: metrics_by_event) = Peep.Persistent.fetch(name)
     module = Peep.Codegen.module(name)
 
     for {event_name, _metrics} <- metrics_by_event do

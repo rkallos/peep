@@ -7,8 +7,12 @@ defmodule CustomStorage do
   """
   @behaviour Peep.Storage
 
+  require Peep.Persistent
+  require Peep.Storage.Atomics
+
   alias Telemetry.Metrics
   alias Peep.Storage
+
 
   @impl true
   @spec new(non_neg_integer) :: tuple
@@ -85,7 +89,7 @@ defmodule CustomStorage do
   end
 
   @impl true
-  def get_all_metrics(agents, %Peep.Persistent{ids_to_metrics: itm}) do
+  def get_all_metrics(agents, Peep.Persistent.persistent(ids_to_metrics: itm)) do
     agents
     |> Tuple.to_list()
     |> Enum.flat_map(fn agent ->
@@ -205,7 +209,7 @@ defmodule CustomStorage do
     group_metrics(rest, itm, acc2)
   end
 
-  defp group_metric({{id, tags}, %Storage.Atomics{} = atomics}, itm, acc) do
+  defp group_metric({{id, tags}, Storage.Atomics.atomic() = atomics}, itm, acc) do
     %{^id => metric} = itm
     put_in(acc, [Access.key(metric, %{}), Access.key(tags)], Storage.Atomics.values(atomics))
   end

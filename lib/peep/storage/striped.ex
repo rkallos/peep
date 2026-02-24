@@ -5,6 +5,7 @@ defmodule Peep.Storage.Striped do
   Offers less lock contention than `Peep.Storage.ETS`, at the cost of higher
   memory usage. Recommended when executing thousands of metrics per second.
   """
+
   alias Telemetry.Metrics
   alias Peep.Storage
 
@@ -187,7 +188,8 @@ defmodule Peep.Storage.Striped do
   end
 
   @impl true
-  def get_all_metrics(tids, %Peep.Persistent{ids_to_metrics: itm}) do
+  def get_all_metrics(tids, persistent) do
+    itm = Peep.Persistent.ids_to_metrics(persistent)
     acc = get_all_metrics2(Tuple.to_list(tids), itm, %{})
     remove_timestamps_from_last_values(acc)
   end
