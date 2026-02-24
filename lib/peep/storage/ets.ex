@@ -21,7 +21,7 @@ defmodule Peep.Storage.ETS do
       # more expensive. The goal is to ruthlessly optimize writes, even at
       # the cost of read performance.
       read_concurrency: false,
-      write_concurrency: true,
+      write_concurrency: :auto,
       decentralized_counters: true
     ]
 
