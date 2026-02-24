@@ -72,10 +72,11 @@ defmodule PeepTest do
     :telemetry.execute([:gauge], %{value: 10})
     :telemetry.execute([:dist], %{value: 15})
 
-    assert Peep.get_metric(name, counter, tags) == 1
-    assert Peep.get_metric(name, sum, tags) == 5
-    assert Peep.get_metric(name, last_value, tags) == 10
-    assert Peep.get_metric(name, distribution, tags).sum == 15
+    all = Peep.get_all_metrics(name)
+    assert Peep.Test.get_metric(all, counter, tags) == 1
+    assert Peep.Test.get_metric(all, sum, tags) == 5
+    assert Peep.Test.get_metric(all, last_value, tags) == 10
+    assert Peep.Test.get_metric(all, distribution, tags).sum == 15
   end
 
   test "Peep process name can be used with Peep.Storage" do
@@ -201,8 +202,9 @@ defmodule PeepTest do
     :telemetry.execute([name, :last_value], %{value: "bar"})
     :telemetry.execute([name, :dist], %{value: []})
 
-    assert Peep.get_metric(name, sum, []) == 0
-    assert Peep.get_metric(name, last_value, []) == nil
-    assert Peep.get_metric(name, dist, []) == nil
+    all = Peep.get_all_metrics(name)
+    assert Peep.Test.get_metric(all, sum, []) == 0
+    assert Peep.Test.get_metric(all, last_value, []) == nil
+    assert Peep.Test.get_metric(all, dist, []) == nil
   end
 end

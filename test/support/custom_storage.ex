@@ -13,7 +13,6 @@ defmodule CustomStorage do
   alias Telemetry.Metrics
   alias Peep.Storage
 
-
   @impl true
   @spec new(non_neg_integer) :: tuple
   def new(n_agents) do
@@ -99,65 +98,6 @@ defmodule CustomStorage do
   end
 
   @impl true
-  def get_metric(agents, id, %Metrics.Counter{}, tags) do
-    key = {id, tags}
-
-    for agent <- Tuple.to_list(agents), reduce: 0 do
-      acc -> acc + Agent.get(agent, &Map.get(&1, key, 0))
-    end
-  end
-
-  def get_metric(agents, id, %Metrics.Sum{}, tags) do
-    key = {id, tags}
-
-    for agent <- Tuple.to_list(agents), reduce: 0 do
-      acc -> acc + Agent.get(agent, &Map.get(&1, key, 0))
-    end
-  end
-
-  def get_metric(agents, id, %Metrics.LastValue{}, tags) do
-    key = {id, tags}
-
-    for agent <- Tuple.to_list(agents), reduce: nil do
-      acc ->
-        case Agent.get(agent, &Map.get(&1, key)) do
-          nil ->
-            acc
-
-          value ->
-            if acc do
-              max(value, acc)
-            else
-              value
-            end
-        end
-    end
-  end
-
-  def get_metric(agents, id, %Metrics.Distribution{}, tags) do
-    key = {id, tags}
-
-    merge_fun = fn _k, v1, v2 -> v1 + v2 end
-
-    for agent <- Tuple.to_list(agents), reduce: nil do
-      acc ->
-        case Agent.get(agent, &Map.get(&1, key)) do
-          nil ->
-            acc
-
-          atomics ->
-            values = Storage.Atomics.values(atomics)
-
-            if acc do
-              Map.merge(acc, values, merge_fun)
-            else
-              values
-            end
-        end
-    end
-  end
-
-  @impl true
   def prune_tags(agents, patterns) do
     agents
     |> Tuple.to_list()
@@ -211,7 +151,11 @@ defmodule CustomStorage do
 
   defp group_metric({{id, tags}, Storage.Atomics.atomic() = atomics}, itm, acc) do
     %{^id => metric} = itm
-    put_in(acc, [Access.key(metric, %{}), Access.key(tags)], Storage.Atomics.values(atomics))
+    values = Storage.Atomics.values(atomics)
+
+    update_in(acc, [Access.key(metric, %{}), Access.key(tags, %{})], fn m1 ->
+      Map.merge(m1, values, fn _k, v1, v2 -> v1 + v2 end)
+    end)
   end
 
   defp group_metric({{id, tags}, value}, itm, acc) do

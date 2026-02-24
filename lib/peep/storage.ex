@@ -27,11 +27,6 @@ defmodule Peep.Storage do
   @callback get_all_metrics(term(), Peep.Persistent.t()) :: map()
 
   @doc """
-  Retrieves a single stored metric
-  """
-  @callback get_metric(term(), Peep.metric_id(), Metrics.t(), map()) :: any()
-
-  @doc """
   Removes metrics whose metadata contains a specific tag key and value.
   This is intended to improve situations where Peep emits metrics whose tags
   have high cardinality.

@@ -150,26 +150,6 @@ defmodule Peep do
   end
 
   @doc """
-  Fetches a single metric from storage. Currently only used in tests.
-  """
-  def get_metric(name, metric, tags) when is_list(tags) do
-    get_metric(name, metric, Map.new(tags))
-  end
-
-  def get_metric(name, metric, tags) do
-    case Peep.Persistent.fetch(name) do
-      Peep.Persistent.persistent(
-        storage: {storage_mod, storage},
-        metrics_to_ids: %{^metric => id}
-      ) ->
-        storage_mod.get_metric(storage, id, metric, tags)
-
-      _ ->
-        nil
-    end
-  end
-
-  @doc """
   Removes metrics whose metadata contains the specified tag patterns.
 
   Example inputs:
