@@ -90,33 +90,6 @@ defmodule Peep.Storage.ETS do
   end
 
   @impl true
-  def get_metric(tid, id, %Metrics.Counter{}, tags) do
-    :ets.select(tid, [{{{id, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
-    |> Enum.reduce(0, fn count, acc -> count + acc end)
-  end
-
-  def get_metric(tid, id, %Metrics.Sum{}, tags) do
-    :ets.select(tid, [{{{id, :"$2", :_}, :"$1"}, [{:==, :"$2", tags}], [:"$1"]}])
-    |> Enum.reduce(0, fn count, acc -> count + acc end)
-  end
-
-  def get_metric(tid, id, %Metrics.LastValue{}, tags) do
-    case :ets.lookup(tid, {id, tags}) do
-      [{_key, value}] -> value
-      _ -> nil
-    end
-  end
-
-  def get_metric(tid, id, %Metrics.Distribution{}, tags) do
-    key = {id, tags}
-
-    case :ets.lookup(tid, key) do
-      [{_key, atomics}] -> Storage.Atomics.values(atomics)
-      _ -> nil
-    end
-  end
-
-  @impl true
   def prune_tags(tid, patterns) do
     match_spec =
       patterns

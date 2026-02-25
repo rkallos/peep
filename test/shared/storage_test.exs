@@ -5,10 +5,11 @@ defmodule Peep.Storage.Test do
   ## Usage
 
   To test one or more Storage backends, set the `:test_storages` on the `:peep`
-  configuration and require this file, ie:
+  configuration and require this file and the test helper, ie:
 
   # your_storage_test.exs
   Application.put_env(:peep, :test_storages, [{CustomStorage, 3}, {OtherStorage, []}])
+  Code.require_file "../deps/peep/test/shared/test_helpers.ex", __DIR__
   Code.require_file "../deps/peep/test/shared/storage_test.exs", __DIR__
 
   """
@@ -37,8 +38,9 @@ defmodule Peep.Storage.Test do
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      assert Peep.get_metric(name, counter, %{}) == 1000
-      assert Peep.get_metric(name, counter, %{even: true}) == 500
+      all = Peep.get_all_metrics(name)
+      assert Peep.Test.get_metric(all, counter, %{}) == 1000
+      assert Peep.Test.get_metric(all, counter, %{even: true}) == 500
     end
 
     test "#{inspect(impl)} - a sum can be stored and retrieved" do
@@ -58,8 +60,9 @@ defmodule Peep.Storage.Test do
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      assert Peep.get_metric(name, sum, []) == 100 * 20
-      assert Peep.get_metric(name, sum, even: true) == 100 * 15
+      all = Peep.get_all_metrics(name)
+      assert Peep.Test.get_metric(all, sum, []) == 100 * 20
+      assert Peep.Test.get_metric(all, sum, even: true) == 100 * 15
     end
 
     test "#{inspect(impl)} - a last_value can be stored and retrieved" do
@@ -79,8 +82,9 @@ defmodule Peep.Storage.Test do
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      assert Peep.get_metric(name, last_value, []) == 10
-      assert Peep.get_metric(name, last_value, odd: true) == 9
+      all = Peep.get_all_metrics(name)
+      assert Peep.Test.get_metric(all, last_value, []) == 10
+      assert Peep.Test.get_metric(all, last_value, odd: true) == 9
     end
 
     test "#{inspect(impl)} - a distribution can be stored and retrieved" do
@@ -138,7 +142,8 @@ defmodule Peep.Storage.Test do
         :sum => 100 * 2_001_000
       }
 
-      assert Peep.get_metric(name, dist, []) == expected
+      all = Peep.get_all_metrics(name)
+      assert Peep.Test.get_metric(all, dist, []) == expected
     end
 
     test "#{inspect(impl)} - distribution bucket variability" do
@@ -180,7 +185,8 @@ defmodule Peep.Storage.Test do
         :sum => 500_500 * 100
       }
 
-      assert Peep.get_metric(name, dist, []) == expected
+      all = Peep.get_all_metrics(name)
+      assert Peep.Test.get_metric(all, dist, []) == expected
     end
 
     test "#{inspect(impl)} - default distribution handles negative values" do
@@ -221,7 +227,8 @@ defmodule Peep.Storage.Test do
         :sum => 0
       }
 
-      assert Peep.get_metric(name, dist, []) == expected
+      all = Peep.get_all_metrics(name)
+      assert Peep.Test.get_metric(all, dist, []) == expected
     end
 
     test "#{inspect(impl)} - storage_size/1" do
