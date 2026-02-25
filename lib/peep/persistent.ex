@@ -8,7 +8,8 @@ defmodule Peep.Persistent do
     :storage,
     events_to_metrics: %{},
     ids_to_metrics: %{},
-    metrics_to_ids: %{}
+    metrics_to_ids: %{},
+    global_tags: %{}
   ])
 
   @compile {:inline, key: 1, fetch: 1}
@@ -28,12 +29,18 @@ defmodule Peep.Persistent do
             storage: storage(),
             events_to_metrics: events_to_metrics(),
             ids_to_metrics: ids_to_metrics(),
-            metrics_to_ids: metrics_to_ids()
+            metrics_to_ids: metrics_to_ids(),
+            global_tags: map()
           )
 
   @spec new(Peep.Options.t()) :: t()
   def new(%Peep.Options{} = options) do
-    %Peep.Options{name: name, storage: storage_impl, metrics: metrics} = options
+    %Peep.Options{
+      name: name,
+      storage: storage_impl,
+      metrics: metrics,
+      global_tags: global_tags
+    } = options
 
     storage =
       case storage_impl do
@@ -58,7 +65,8 @@ defmodule Peep.Persistent do
       storage: storage,
       events_to_metrics: events_to_metrics,
       ids_to_metrics: ids_to_metrics,
-      metrics_to_ids: metrics_to_ids
+      metrics_to_ids: metrics_to_ids,
+      global_tags: global_tags
     )
   end
 
