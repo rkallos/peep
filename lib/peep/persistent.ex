@@ -60,10 +60,15 @@ defmodule Peep.Persistent do
       metrics_to_ids: metrics_to_ids
     } = Peep.assign_metric_ids(metrics)
 
+    precomputed_events =
+      Map.new(events_to_metrics, fn {event, metric_list} ->
+        {event, Peep.EventHandler.precompute_metrics(metric_list)}
+      end)
+
     persistent(
       name: name,
       storage: storage,
-      events_to_metrics: events_to_metrics,
+      events_to_metrics: precomputed_events,
       ids_to_metrics: ids_to_metrics,
       metrics_to_ids: metrics_to_ids,
       global_tags: global_tags
