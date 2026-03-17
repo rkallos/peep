@@ -81,6 +81,7 @@ defmodule Peep do
     defstruct name: nil,
               interval: nil,
               handler_ids: nil,
+              event_keys: nil,
               statsd_opts: nil,
               statsd_state: nil
   end
@@ -258,7 +259,7 @@ defmodule Peep do
       Peep.Persistent.new(options)
       |> Peep.Persistent.store()
 
-    handler_ids = EventHandler.attach(name)
+    {handler_ids, event_keys} = EventHandler.attach(name)
 
     statsd_opts = options.statsd
     statsd_flush_interval = statsd_opts[:flush_interval_ms]
@@ -277,6 +278,7 @@ defmodule Peep do
     state = %State{
       name: name,
       handler_ids: handler_ids,
+      event_keys: event_keys,
       statsd_opts: statsd_opts,
       statsd_state: statsd_state
     }
@@ -312,9 +314,9 @@ defmodule Peep do
   end
 
   @impl true
-  def terminate(_reason, %{name: name, handler_ids: handler_ids}) do
+  def terminate(_reason, %{name: name, handler_ids: handler_ids, event_keys: event_keys}) do
     Peep.Persistent.erase(name)
-    EventHandler.detach(handler_ids)
+    EventHandler.detach(handler_ids, event_keys)
   end
 
   # private

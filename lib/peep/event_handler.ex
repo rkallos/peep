@@ -6,25 +6,34 @@ defmodule Peep.EventHandler do
   import Peep.Persistent, only: [persistent: 1]
 
   def attach(name) do
-    persistent(events_to_metrics: metrics_by_event) = Peep.Persistent.fetch(name)
+    persistent(
+      events_to_metrics: metrics_by_event,
+      storage: storage
+    ) = Peep.Persistent.fetch(name)
 
-    for {event_name, _metrics} <- metrics_by_event do
-      handler_id = handler_id(event_name, name)
+    pairs =
+      for {event_name, metrics} <- metrics_by_event do
+        event_key = :erlang.unique_integer([:positive, :monotonic])
+        :persistent_term.put(event_key, {storage, metrics})
+        handler_id = handler_id(event_name, name)
 
-      :ok =
-        :telemetry.attach(
-          handler_id,
-          event_name,
-          &__MODULE__.handle_event/4,
-          name
-        )
+        :ok =
+          :telemetry.attach(
+            handler_id,
+            event_name,
+            &__MODULE__.handle_event/4,
+            name
+          )
 
-      handler_id
-    end
+        {handler_id, event_key}
+      end
+
+    Enum.unzip(pairs)
   end
 
-  def detach(handler_ids) do
+  def detach(handler_ids, event_keys) do
     for id <- handler_ids, do: :telemetry.detach(id)
+    for key <- event_keys, do: :persistent_term.erase(key)
     :ok
   end
 
