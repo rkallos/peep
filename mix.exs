@@ -44,6 +44,7 @@ defmodule Peep.MixProject do
       {:inch_ex, "~> 2.0", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev], runtime: false},
       {:nimble_parsec, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:benchee, "~> 1.3", only: [:dev], runtime: false},
       {:plug_cowboy, "~> 2.7", only: [:test]},
 
       # Optional dependencies
