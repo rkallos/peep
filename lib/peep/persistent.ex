@@ -62,7 +62,7 @@ defmodule Peep.Persistent do
 
     precomputed_events =
       Map.new(events_to_metrics, fn {event, metric_list} ->
-        {event, Peep.EventHandler.precompute_metrics(metric_list)}
+        {event, Peep.EventHandler.precompute_metrics(metric_list, storage)}
       end)
 
     persistent(

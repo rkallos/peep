@@ -41,7 +41,7 @@ defmodule Peep.EventHandler do
     {__MODULE__, peep_name, event_name}
   end
 
-  def precompute_metrics(metrics) do
+  def precompute_metrics(metrics, {storage_mod, _}) do
     Enum.map(metrics, fn {metric, id} ->
       %{
         measurement: measurement,
@@ -52,7 +52,12 @@ defmodule Peep.EventHandler do
 
       tag_fn = compile_tag_fn(tag_values, tags)
       keep_val = if is_nil(keep), do: :no_keep, else: keep
-      {id, metric_type(metric), metric, keep_val, measurement, tag_fn}
+
+      insert_fn = fn data, value, tags ->
+        storage_mod.insert_metric(data, id, metric, value, tags)
+      end
+
+      {metric_type(metric), insert_fn, keep_val, measurement, tag_fn}
     end)
   end
 
@@ -66,73 +71,69 @@ defmodule Peep.EventHandler do
   def handle_event(_event, measurements, metadata, event_key) do
     {{storage_mod, storage}, metrics} = :persistent_term.get(event_key)
     resolved = storage_mod.resolve(storage)
-    store_metrics(metrics, measurements, metadata, storage_mod, resolved)
+    store_metrics(metrics, measurements, metadata, resolved)
   end
 
-  defp store_metrics([], _measurements, _metadata, _mod, _data), do: :ok
+  defp store_metrics([], _measurements, _metadata, _data), do: :ok
 
   defp store_metrics(
-         [{id, :counter, metric, :no_keep, _measurement, tag_fn} | rest],
+         [{:counter, insert_fn, :no_keep, _measurement, tag_fn} | rest],
          measurements,
          metadata,
-         mod,
          data
        ) do
-    mod.insert_metric(data, id, metric, 1, tag_fn.(metadata))
-    store_metrics(rest, measurements, metadata, mod, data)
+    insert_fn.(data, 1, tag_fn.(metadata))
+    store_metrics(rest, measurements, metadata, data)
   end
 
   defp store_metrics(
-         [{id, _type, metric, :no_keep, measurement, tag_fn} | rest],
+         [{_type, insert_fn, :no_keep, measurement, tag_fn} | rest],
          measurements,
          metadata,
-         mod,
          data
        ) do
     case fetch_measurement(measurement, measurements, metadata) do
       value when is_number(value) ->
-        mod.insert_metric(data, id, metric, value, tag_fn.(metadata))
+        insert_fn.(data, value, tag_fn.(metadata))
 
       _ ->
         nil
     end
 
-    store_metrics(rest, measurements, metadata, mod, data)
+    store_metrics(rest, measurements, metadata, data)
   end
 
   defp store_metrics(
-         [{id, :counter, metric, keep, _measurement, tag_fn} | rest],
+         [{:counter, insert_fn, keep, _measurement, tag_fn} | rest],
          measurements,
          metadata,
-         mod,
          data
        ) do
     if keep?(keep, metadata, nil) do
-      mod.insert_metric(data, id, metric, 1, tag_fn.(metadata))
+      insert_fn.(data, 1, tag_fn.(metadata))
     end
 
-    store_metrics(rest, measurements, metadata, mod, data)
+    store_metrics(rest, measurements, metadata, data)
   end
 
   defp store_metrics(
-         [{id, _type, metric, keep, measurement, tag_fn} | rest],
+         [{_type, insert_fn, keep, measurement, tag_fn} | rest],
          measurements,
          metadata,
-         mod,
          data
        ) do
     if keep?(keep, metadata, measurement) do
       # credo:disable-for-next-line Credo.Check.Refactor.Nesting
       case fetch_measurement(measurement, measurements, metadata) do
         value when is_number(value) ->
-          mod.insert_metric(data, id, metric, value, tag_fn.(metadata))
+          insert_fn.(data, value, tag_fn.(metadata))
 
         _ ->
           nil
       end
     end
 
-    store_metrics(rest, measurements, metadata, mod, data)
+    store_metrics(rest, measurements, metadata, data)
   end
 
   defp keep?(keep, metadata, measurement) when is_function(keep, 2),
