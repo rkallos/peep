@@ -51,7 +51,8 @@ defmodule Peep.EventHandler do
       } = metric
 
       tag_fn = compile_tag_fn(tag_values, tags)
-      {id, metric_type(metric), metric, keep, measurement, tag_fn}
+      keep_val = if is_nil(keep), do: :no_keep, else: keep
+      {id, metric_type(metric), metric, keep_val, measurement, tag_fn}
     end)
   end
 
@@ -69,6 +70,35 @@ defmodule Peep.EventHandler do
   end
 
   defp store_metrics([], _measurements, _metadata, _mod, _data), do: :ok
+
+  defp store_metrics(
+         [{id, :counter, metric, :no_keep, _measurement, tag_fn} | rest],
+         measurements,
+         metadata,
+         mod,
+         data
+       ) do
+    mod.insert_metric(data, id, metric, 1, tag_fn.(metadata))
+    store_metrics(rest, measurements, metadata, mod, data)
+  end
+
+  defp store_metrics(
+         [{id, _type, metric, :no_keep, measurement, tag_fn} | rest],
+         measurements,
+         metadata,
+         mod,
+         data
+       ) do
+    case fetch_measurement(measurement, measurements, metadata) do
+      value when is_number(value) ->
+        mod.insert_metric(data, id, metric, value, tag_fn.(metadata))
+
+      _ ->
+        nil
+    end
+
+    store_metrics(rest, measurements, metadata, mod, data)
+  end
 
   defp store_metrics(
          [{id, :counter, metric, keep, _measurement, tag_fn} | rest],
