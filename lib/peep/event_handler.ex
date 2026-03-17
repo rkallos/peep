@@ -64,7 +64,8 @@ defmodule Peep.EventHandler do
 
   def handle_event(_event, measurements, metadata, event_key) do
     {{storage_mod, storage}, metrics} = :persistent_term.get(event_key)
-    store_metrics(metrics, measurements, metadata, storage_mod, storage)
+    resolved = storage_mod.resolve(storage)
+    store_metrics(metrics, measurements, metadata, storage_mod, resolved)
   end
 
   defp store_metrics([], _measurements, _metadata, _mod, _data), do: :ok

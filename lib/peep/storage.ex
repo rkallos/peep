@@ -17,6 +17,12 @@ defmodule Peep.Storage do
   @callback storage_size(term()) :: %{size: non_neg_integer(), memory: non_neg_integer()}
 
   @doc """
+  Resolves storage to its per-scheduler form for the current scheduler.
+  Called once per event to avoid redundant scheduler lookups across metrics.
+  """
+  @callback resolve(term()) :: term()
+
+  @doc """
   Stores a sample metric
   """
   @callback insert_metric(term(), Peep.metric_id(), Metrics.t(), term(), map()) :: any()
