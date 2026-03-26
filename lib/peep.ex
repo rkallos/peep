@@ -259,6 +259,7 @@ defmodule Peep do
       |> Peep.Persistent.store()
 
     handler_ids = EventHandler.attach(name)
+    :telemetry.persist()
 
     statsd_opts = options.statsd
     statsd_flush_interval = statsd_opts[:flush_interval_ms]

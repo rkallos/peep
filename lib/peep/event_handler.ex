@@ -6,9 +6,12 @@ defmodule Peep.EventHandler do
   import Peep.Persistent, only: [persistent: 1]
 
   def attach(name) do
-    persistent(events_to_metrics: metrics_by_event) = Peep.Persistent.fetch(name)
+    persistent(
+      events_to_metrics: metrics_by_event,
+      storage: {storage_mod, storage}
+    ) = Peep.Persistent.fetch(name)
 
-    for {event_name, _metrics} <- metrics_by_event do
+    for {event_name, metrics} <- metrics_by_event do
       handler_id = handler_id(event_name, name)
 
       :ok =
@@ -16,7 +19,7 @@ defmodule Peep.EventHandler do
           handler_id,
           event_name,
           &__MODULE__.handle_event/4,
-          name
+          {name, metrics, storage_mod, storage}
         )
 
       handler_id
@@ -32,12 +35,7 @@ defmodule Peep.EventHandler do
     {__MODULE__, peep_name, event_name}
   end
 
-  def handle_event(event, measurements, metadata, name) do
-    persistent(
-      events_to_metrics: %{^event => metrics},
-      storage: {storage_mod, storage}
-    ) = Peep.Persistent.fetch(name)
-
+  def handle_event(_event, measurements, metadata, {_name, metrics, storage_mod, storage}) do
     store_metrics(metrics, measurements, metadata, storage_mod, storage)
   end
 
