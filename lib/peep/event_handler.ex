@@ -1,7 +1,7 @@
 defmodule Peep.EventHandler do
   @moduledoc false
 
-  @compile {:inline, keep?: 3, meta: 3, fetch_measurement: 3}
+  @compile {:inline, keep?: 3, fetch_measurement: 3}
 
   import Peep.Persistent, only: [persistent: 1]
 
@@ -14,12 +14,14 @@ defmodule Peep.EventHandler do
     for {event_name, metrics} <- metrics_by_event do
       handler_id = handler_id(event_name, name)
 
+      {tag_fns, metrics_with_tag_fn_idx} = deduplicate_tag_fns(metrics)
+
       :ok =
         :telemetry.attach(
           handler_id,
           event_name,
           &__MODULE__.handle_event/4,
-          {name, metrics, storage_mod, storage}
+          {metrics_with_tag_fn_idx, storage_mod, storage, tag_fns}
         )
 
       handler_id
@@ -35,17 +37,36 @@ defmodule Peep.EventHandler do
     {__MODULE__, peep_name, event_name}
   end
 
-  def handle_event(_event, measurements, metadata, {_name, metrics, storage_mod, storage}) do
-    store_metrics(metrics, measurements, metadata, storage_mod, storage)
+  def handle_event(
+        _event,
+        measurements,
+        metadata,
+        {metrics, storage_mod, storage, tag_fns}
+      ) do
+    tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns), 0, [])
+    store_metrics(metrics, measurements, metadata, storage_mod, storage, tag_results)
   end
 
-  defp store_metrics([], _measurements, _metadata, _mod, _data), do: :ok
+  defp compute_tags(_tag_fns, _metadata, size, size, acc) do
+    acc |> :lists.reverse() |> List.to_tuple()
+  end
 
-  defp store_metrics([{metric, id} | rest], measurements, metadata, mod, data) do
+  defp compute_tags(tag_fns, metadata, size, idx, acc) do
+    compute_tags(tag_fns, metadata, size, idx + 1, [elem(tag_fns, idx).(metadata) | acc])
+  end
+
+  defp store_metrics([], _measurements, _metadata, _mod, _data, _tag_results), do: :ok
+
+  defp store_metrics(
+         [{metric, id, tag_idx} | rest],
+         measurements,
+         metadata,
+         mod,
+         data,
+         tag_results
+       ) do
     %{
       measurement: measurement,
-      tag_values: tag_values,
-      tags: tags,
       keep: keep
     } = metric
 
@@ -53,12 +74,14 @@ defmodule Peep.EventHandler do
       # credo:disable-for-next-line Credo.Check.Refactor.Nesting
       case fetch_measurement(measurement, measurements, metadata) do
         value when is_number(value) ->
+          meta = elem(tag_results, tag_idx)
+
           mod.insert_metric(
             data,
             id,
             metric,
             value,
-            meta(metadata, tag_values, tags)
+            meta
           )
 
         _ ->
@@ -66,7 +89,7 @@ defmodule Peep.EventHandler do
       end
     end
 
-    store_metrics(rest, measurements, metadata, mod, data)
+    store_metrics(rest, measurements, metadata, mod, data, tag_results)
   end
 
   defp keep?(keep, metadata, measurement) when is_function(keep, 2),
@@ -74,11 +97,6 @@ defmodule Peep.EventHandler do
 
   defp keep?(keep, metadata, _measurement) when is_function(keep, 1), do: keep.(metadata)
   defp keep?(_keep, _metadata, _measurement), do: true
-
-  # When selected list is empty, just return empty map
-  defp meta(_tags, _map, []), do: %{}
-  defp meta(meta, _map, tags) when is_function(tags, 1), do: tags.(meta)
-  defp meta(tags, map, keys), do: Map.take(map.(tags), keys)
 
   defp fetch_measurement(%Telemetry.Metrics.Counter{}, _measurements, _metadata) do
     1
@@ -101,5 +119,40 @@ defmodule Peep.EventHandler do
           _ -> 1
         end
     end
+  end
+
+  defp deduplicate_tag_fns(metrics) do
+    {unique_metrics_tags, _} =
+      Enum.reduce(metrics, {%{}, 0}, fn {metric, _id}, {map, next_idx} ->
+        key = tag_fn_key(metric)
+
+        case map do
+          %{^key => _} -> {map, next_idx}
+          _ -> {Map.put(map, key, next_idx), next_idx + 1}
+        end
+      end)
+
+    tag_fns =
+      unique_metrics_tags
+      |> Enum.sort_by(fn {_key, idx} -> idx end)
+      |> Enum.map(fn {{tag_values, tags}, _idx} -> compile_tag_fn(tag_values, tags) end)
+      |> List.to_tuple()
+
+    metrics_with_tag_fn_idx =
+      Enum.map(metrics, fn {metric, id} ->
+        key = tag_fn_key(metric)
+        {metric, id, Map.fetch!(unique_metrics_tags, key)}
+      end)
+
+    {tag_fns, metrics_with_tag_fn_idx}
+  end
+
+  defp tag_fn_key(metric), do: {metric.tag_values, metric.tags}
+
+  defp compile_tag_fn(_tag_values, []), do: fn _metadata -> %{} end
+  defp compile_tag_fn(_tag_values, tags) when is_function(tags, 1), do: tags
+
+  defp compile_tag_fn(tag_values, keys) do
+    fn metadata -> Map.take(tag_values.(metadata), keys) end
   end
 end
