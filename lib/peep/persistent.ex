@@ -83,7 +83,7 @@ defmodule Peep.Persistent do
 
   @spec erase(name()) :: :ok
   def erase(name) when is_atom(name) do
-    :persistent_term.erase(name)
+    :persistent_term.erase(key(name))
     :ok
   end
 

@@ -142,6 +142,21 @@ defmodule PeepTest do
     assert [] == :telemetry.list_handlers(prefix)
   end
 
+  test "persistent_term is cleaned up on shutdown" do
+    name = :"#{__MODULE__}_persistent_term_cleanup"
+
+    {:ok, options} =
+      Peep.Options.validate(name: name, metrics: [Metrics.counter("cleanup.test.counter")])
+
+    {:ok, pid} = GenServer.start(Peep, options, name: options.name)
+
+    assert Peep.Persistent.fetch(name) != nil
+
+    GenServer.stop(pid, :shutdown)
+
+    assert Peep.Persistent.fetch(name) == nil
+  end
+
   test "assign_ids" do
     metrics =
       [c, s, d, l] = [
