@@ -54,16 +54,16 @@ defmodule Peep.EventHandler do
         )
       ) do
     resolved = storage_mod.resolve(storage)
-    tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns), 0, [])
+    tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns) - 1, [])
     store_metrics(metrics, measurements, metadata, resolved, tag_results)
   end
 
-  defp compute_tags(_tag_fns, _metadata, size, size, acc) do
-    acc |> :lists.reverse() |> List.to_tuple()
+  defp compute_tags(_tag_fns, _metadata, -1, acc) do
+    List.to_tuple(acc)
   end
 
-  defp compute_tags(tag_fns, metadata, size, idx, acc) do
-    compute_tags(tag_fns, metadata, size, idx + 1, [elem(tag_fns, idx).(metadata) | acc])
+  defp compute_tags(tag_fns, metadata, idx, acc) do
+    compute_tags(tag_fns, metadata, idx - 1, [elem(tag_fns, idx).(metadata) | acc])
   end
 
   defp store_metrics([], _measurements, _metadata, _data, _tag_results), do: :ok
