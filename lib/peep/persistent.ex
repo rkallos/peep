@@ -19,7 +19,7 @@ defmodule Peep.Persistent do
   @typep events_to_metrics() :: %{
            :telemetry.event_name() => [{Telemetry.Metrics.t(), non_neg_integer()}]
          }
-  @type ids_to_metrics() :: %{Peep.metric_id() => Telemetry.Metrics.t()}
+  @type ids_to_metrics() :: tuple()
   @type t() ::
           record(:persistent,
             name: name(),

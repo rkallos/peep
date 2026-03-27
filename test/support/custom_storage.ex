@@ -153,7 +153,7 @@ defmodule CustomStorage do
   end
 
   defp group_metric({{id, tags}, Storage.Atomics.atomic() = atomics}, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
     values = Storage.Atomics.values(atomics)
 
     update_in(acc, [Access.key(metric, %{}), Access.key(tags, %{})], fn m1 ->
@@ -162,7 +162,7 @@ defmodule CustomStorage do
   end
 
   defp group_metric({{id, tags}, value}, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
 
     case metric do
       %Metrics.Counter{} ->

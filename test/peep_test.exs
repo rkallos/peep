@@ -167,12 +167,12 @@ defmodule PeepTest do
       ]
 
     expected_by_event = %{
-      [:one] => [{c, 1}, {s, 2}],
-      [:three] => [{d, 3}],
-      [:five] => [{l, 4}]
+      [:one] => [{c, 0}, {s, 1}],
+      [:three] => [{d, 2}],
+      [:five] => [{l, 3}]
     }
 
-    expected_by_id = %{1 => c, 2 => s, 3 => d, 4 => l}
+    expected_by_id = {c, s, d, l}
 
     %{
       events_to_metrics: actual_by_event,

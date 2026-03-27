@@ -136,7 +136,7 @@ defmodule Peep.Storage.Striped do
   end
 
   defp add_metric({{id, _tags}, _value} = kv, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
     add_metric2(kv, metric, acc)
   end
 

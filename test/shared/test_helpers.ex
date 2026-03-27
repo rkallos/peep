@@ -27,10 +27,16 @@ defmodule Peep.Test do
   def insert_metric(_name, _metric, _value, _tags), do: nil
 
   defp find_metric_id(ids_to_metrics, metric) do
-    Enum.find_value(ids_to_metrics, :error, fn
-      {id, ^metric} -> {:ok, id}
-      _ -> nil
-    end)
+    find_metric_id(ids_to_metrics, metric, tuple_size(ids_to_metrics), 0)
+  end
+
+  defp find_metric_id(_tuple, _metric, size, size), do: :error
+
+  defp find_metric_id(tuple, metric, size, idx) do
+    case elem(tuple, idx) do
+      ^metric -> {:ok, idx}
+      _ -> find_metric_id(tuple, metric, size, idx + 1)
+    end
   end
 
   def fresh_id do
