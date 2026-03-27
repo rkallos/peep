@@ -154,9 +154,10 @@ defmodule Peep do
 
   defp extend_with(metrics, global_tags) do
     Map.new(metrics, fn {metric, measurements} ->
-      updated = Map.new(measurements, fn {tags, val} ->
-        {Map.merge(global_tags, tags), val}
-      end)
+      updated =
+        Map.new(measurements, fn {tags, val} ->
+          {Map.merge(global_tags, tags), val}
+        end)
 
       {metric, updated}
     end)
