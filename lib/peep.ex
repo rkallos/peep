@@ -101,23 +101,6 @@ defmodule Peep do
     end
   end
 
-  def insert_metric(name, metric, value, tags) when is_number(value) do
-    case Peep.Persistent.fetch(name) do
-      Peep.Persistent.persistent(
-        storage: {storage_mod, storage},
-        metrics_to_ids: %{^metric => id}
-      ) ->
-        storage
-        |> storage_mod.resolve()
-        |> storage_mod.insert_metric(id, metric, value, tags)
-
-      _ ->
-        nil
-    end
-  end
-
-  def insert_metric(_name, _metric, _value, _tags), do: nil
-
   @doc """
   Returns measurements about the size of a running Peep's storage, in number of
   ETS elements and in bytes of memory.

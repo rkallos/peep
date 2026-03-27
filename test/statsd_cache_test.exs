@@ -22,7 +22,7 @@ defmodule StatsdCacheTest do
 
       {:ok, _pid} = Peep.start_link(opts)
 
-      Peep.insert_metric(name, counter, 1, %{})
+      Peep.Test.insert_metric(name, counter, 1, %{})
 
       {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(name), Cache.new([]))
 
@@ -32,7 +32,7 @@ defmodule StatsdCacheTest do
 
       assert Map.values(delta_two) == []
 
-      Peep.insert_metric(name, counter, 1, %{})
+      Peep.Test.insert_metric(name, counter, 1, %{})
       {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(name), cache_two)
 
       assert Map.values(delta_three) == [1]
@@ -51,7 +51,7 @@ defmodule StatsdCacheTest do
 
       {:ok, _pid} = Peep.start_link(opts)
 
-      Peep.insert_metric(name, sum, 10, %{})
+      Peep.Test.insert_metric(name, sum, 10, %{})
 
       {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(name), Cache.new([]))
 
@@ -61,7 +61,7 @@ defmodule StatsdCacheTest do
 
       assert Map.values(delta_two) == []
 
-      Peep.insert_metric(name, sum, 10, %{})
+      Peep.Test.insert_metric(name, sum, 10, %{})
       {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(name), cache_two)
 
       assert Map.values(delta_three) == [10]
@@ -80,9 +80,9 @@ defmodule StatsdCacheTest do
 
       {:ok, _pid} = Peep.start_link(opts)
 
-      Peep.insert_metric(name, dist, 500, %{})
-      Peep.insert_metric(name, dist, 500, %{})
-      Peep.insert_metric(name, dist, 500, %{})
+      Peep.Test.insert_metric(name, dist, 500, %{})
+      Peep.Test.insert_metric(name, dist, 500, %{})
+      Peep.Test.insert_metric(name, dist, 500, %{})
 
       {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(name), Cache.new([]))
 
@@ -92,9 +92,9 @@ defmodule StatsdCacheTest do
 
       assert Map.values(delta_two) == []
 
-      Peep.insert_metric(name, dist, 500, %{})
-      Peep.insert_metric(name, dist, 500, %{})
-      Peep.insert_metric(name, dist, 1000, %{})
+      Peep.Test.insert_metric(name, dist, 500, %{})
+      Peep.Test.insert_metric(name, dist, 500, %{})
+      Peep.Test.insert_metric(name, dist, 1000, %{})
       {delta_three, _cache_three} = calculate_deltas_and_replacement(cache_of(name), cache_two)
 
       assert Map.values(delta_three) |> Enum.sort() == [1, 2]
@@ -113,7 +113,7 @@ defmodule StatsdCacheTest do
 
       {:ok, _pid} = Peep.start_link(opts)
 
-      Peep.insert_metric(name, last_value, 10, %{})
+      Peep.Test.insert_metric(name, last_value, 10, %{})
 
       {delta_one, cache_one} = calculate_deltas_and_replacement(cache_of(name), Cache.new([]))
 

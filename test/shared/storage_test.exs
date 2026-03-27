@@ -28,10 +28,10 @@ defmodule Peep.Storage.Test do
 
       f = fn ->
         for i <- 1..10 do
-          Peep.insert_metric(name, counter, 1, %{})
+          Peep.Test.insert_metric(name, counter, 1, %{})
 
           if rem(i, 2) == 0 do
-            Peep.insert_metric(name, counter, 1, %{even: true})
+            Peep.Test.insert_metric(name, counter, 1, %{even: true})
           end
         end
       end
@@ -50,10 +50,10 @@ defmodule Peep.Storage.Test do
 
       f = fn ->
         for i <- 1..10 do
-          Peep.insert_metric(name, sum, 2, %{})
+          Peep.Test.insert_metric(name, sum, 2, %{})
 
           if rem(i, 2) == 0 do
-            Peep.insert_metric(name, sum, 3, %{even: true})
+            Peep.Test.insert_metric(name, sum, 3, %{even: true})
           end
         end
       end
@@ -72,10 +72,10 @@ defmodule Peep.Storage.Test do
 
       f = fn ->
         for i <- 1..10 do
-          Peep.insert_metric(name, last_value, i, %{})
+          Peep.Test.insert_metric(name, last_value, i, %{})
 
           if rem(i, 2) == 1 do
-            Peep.insert_metric(name, last_value, i, %{odd: true})
+            Peep.Test.insert_metric(name, last_value, i, %{odd: true})
           end
         end
       end
@@ -95,7 +95,7 @@ defmodule Peep.Storage.Test do
 
       f = fn ->
         for i <- 0..2000 do
-          Peep.insert_metric(name, dist, i, %{})
+          Peep.Test.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -159,7 +159,7 @@ defmodule Peep.Storage.Test do
 
       f = fn ->
         for i <- 0..1000 do
-          Peep.insert_metric(name, dist, i, %{})
+          Peep.Test.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -202,7 +202,7 @@ defmodule Peep.Storage.Test do
 
       f = fn ->
         for i <- -500..500 do
-          Peep.insert_metric(name, dist, i, %{})
+          Peep.Test.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -251,7 +251,7 @@ defmodule Peep.Storage.Test do
 
       for metric <- metrics, tags <- tags_sets do
         %{size: size_before, memory: mem_before} = Peep.storage_size(name)
-        Peep.insert_metric(name, metric, 5, tags)
+        Peep.Test.insert_metric(name, metric, 5, tags)
         %{size: size_after, memory: mem_after} = Peep.storage_size(name)
 
         assert size_after > size_before
@@ -273,8 +273,8 @@ defmodule Peep.Storage.Test do
 
       populate = fn ->
         for metric <- metrics do
-          Peep.insert_metric(name, metric, 5, %{foo: :bar})
-          Peep.insert_metric(name, metric, 5, %{baz: :quux})
+          Peep.Test.insert_metric(name, metric, 5, %{foo: :bar})
+          Peep.Test.insert_metric(name, metric, 5, %{baz: :quux})
         end
 
         assert Peep.get_all_metrics(name) != %{}

@@ -1,6 +1,24 @@
 defmodule Peep.Test do
   @moduledoc false
   alias Telemetry.Metrics
+  require Peep.Persistent
+
+  def insert_metric(name, metric, value, tags) when is_number(value) do
+    case Peep.Persistent.fetch(name) do
+      Peep.Persistent.persistent(
+        storage: {storage_mod, storage},
+        metrics_to_ids: %{^metric => id}
+      ) ->
+        storage
+        |> storage_mod.resolve()
+        |> storage_mod.insert_metric(id, metric, value, tags)
+
+      _ ->
+        nil
+    end
+  end
+
+  def insert_metric(_name, _metric, _value, _tags), do: nil
 
   def get_metric(all_metrics, metric, tags) do
     tags = to_map(tags)

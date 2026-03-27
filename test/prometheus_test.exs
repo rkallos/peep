@@ -28,7 +28,7 @@ defmodule PrometheusTest do
 
         {:ok, _pid} = Peep.start_link(opts)
 
-        Peep.insert_metric(name, counter, 1, %{baz: "quux"})
+        Peep.Test.insert_metric(name, counter, 1, %{baz: "quux"})
 
         expected = [
           "# HELP prometheus_test_counter a counter",
@@ -52,7 +52,7 @@ defmodule PrometheusTest do
 
         {:ok, _pid} = Peep.start_link(opts)
 
-        Peep.insert_metric(name, counter, 1, %{foo: 2137, baz: "quux"})
+        Peep.Test.insert_metric(name, counter, 1, %{foo: 2137, baz: "quux"})
 
         expected = [
           "# HELP prometheus_test_counter a counter",
@@ -76,7 +76,7 @@ defmodule PrometheusTest do
 
       {:ok, _pid} = Peep.start_link(opts)
 
-      Peep.insert_metric(name, counter, 1, %{foo: :bar, baz: "quux"})
+      Peep.Test.insert_metric(name, counter, 1, %{foo: :bar, baz: "quux"})
 
       expected = [
         "# HELP prometheus_test_counter a counter",
@@ -100,8 +100,8 @@ defmodule PrometheusTest do
 
         {:ok, _pid} = Peep.start_link(opts)
 
-        Peep.insert_metric(name, sum, 5, %{foo: :bar, baz: "quux"})
-        Peep.insert_metric(name, sum, 3, %{foo: :bar, baz: "quux"})
+        Peep.Test.insert_metric(name, sum, 5, %{foo: :bar, baz: "quux"})
+        Peep.Test.insert_metric(name, sum, 3, %{foo: :bar, baz: "quux"})
 
         expected = [
           "# HELP prometheus_test_sum a sum",
@@ -129,8 +129,8 @@ defmodule PrometheusTest do
 
         {:ok, _pid} = Peep.start_link(opts)
 
-        Peep.insert_metric(name, sum, 5, %{foo: :bar, baz: "quux"})
-        Peep.insert_metric(name, sum, 3, %{foo: :bar, baz: "quux"})
+        Peep.Test.insert_metric(name, sum, 5, %{foo: :bar, baz: "quux"})
+        Peep.Test.insert_metric(name, sum, 3, %{foo: :bar, baz: "quux"})
 
         expected = [
           "# HELP prometheus_test_sum a sum",
@@ -155,7 +155,7 @@ defmodule PrometheusTest do
 
         {:ok, _pid} = Peep.start_link(opts)
 
-        Peep.insert_metric(name, last_value, 5, %{blee: :bloo, flee: "floo"})
+        Peep.Test.insert_metric(name, last_value, 5, %{blee: :bloo, flee: "floo"})
 
         expected = [
           "# HELP prometheus_test_gauge a last_value",
@@ -183,7 +183,7 @@ defmodule PrometheusTest do
 
         {:ok, _pid} = Peep.start_link(opts)
 
-        Peep.insert_metric(name, last_value, 5, %{blee: :bloo, flee: "floo"})
+        Peep.Test.insert_metric(name, last_value, 5, %{blee: :bloo, flee: "floo"})
 
         expected = [
           "# HELP prometheus_test_gauge a last_value",
@@ -215,7 +215,7 @@ defmodule PrometheusTest do
       expected = []
       assert export(name) == lines_to_string(expected)
 
-      Peep.insert_metric(name, dist, 1, %{glee: :gloo})
+      Peep.Test.insert_metric(name, dist, 1, %{glee: :gloo})
 
       expected = [
         "# HELP prometheus_test_distribution a distribution",
@@ -264,7 +264,7 @@ defmodule PrometheusTest do
       assert export(name) == lines_to_string(expected)
 
       for i <- 2..2000 do
-        Peep.insert_metric(name, dist, i, %{glee: :gloo})
+        Peep.Test.insert_metric(name, dist, i, %{glee: :gloo})
       end
 
       expected = [
@@ -337,7 +337,7 @@ defmodule PrometheusTest do
       expected = []
       assert export(name) == lines_to_string(expected)
 
-      Peep.insert_metric(name, dist, 1, %{glee: :gloo})
+      Peep.Test.insert_metric(name, dist, 1, %{glee: :gloo})
 
       expected = [
         "# HELP prometheus_test_distribution a distribution",
@@ -360,7 +360,7 @@ defmodule PrometheusTest do
 
       f = fn ->
         for i <- 1..2000 do
-          Peep.insert_metric(name, dist, i, %{glee: :gloo})
+          Peep.Test.insert_metric(name, dist, i, %{glee: :gloo})
         end
       end
 
@@ -404,10 +404,10 @@ defmodule PrometheusTest do
 
       {:ok, _pid} = Peep.start_link(opts)
 
-      Peep.insert_metric(name, counter, 1, %{atom: "\"string\""})
-      Peep.insert_metric(name, counter, 1, %{"\"string\"" => :atom})
-      Peep.insert_metric(name, counter, 1, %{"\"string\"" => "\"string\""})
-      Peep.insert_metric(name, counter, 1, %{"string" => "string\n"})
+      Peep.Test.insert_metric(name, counter, 1, %{atom: "\"string\""})
+      Peep.Test.insert_metric(name, counter, 1, %{"\"string\"" => :atom})
+      Peep.Test.insert_metric(name, counter, 1, %{"\"string\"" => "\"string\""})
+      Peep.Test.insert_metric(name, counter, 1, %{"string" => "string\n"})
 
       expected = [
         "# HELP prometheus_test_counter a counter",
@@ -441,7 +441,7 @@ defmodule PrometheusTest do
       # Create a struct that doesn't implement String.Chars
       error_struct = %TestError{reason: :tcp_closed, code: 1001}
 
-      Peep.insert_metric(name, counter, 1, %{error: error_struct})
+      Peep.Test.insert_metric(name, counter, 1, %{error: error_struct})
 
       result = export(name)
 
