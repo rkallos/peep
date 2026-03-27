@@ -8,7 +8,6 @@ defmodule Peep.Persistent do
     :storage,
     events_to_metrics: %{},
     ids_to_metrics: %{},
-    metrics_to_ids: %{},
     global_tags: %{}
   ])
 
@@ -20,8 +19,6 @@ defmodule Peep.Persistent do
   @typep events_to_metrics() :: %{
            :telemetry.event_name() => [{Telemetry.Metrics.t(), non_neg_integer()}]
          }
-  @typep metrics_to_ids() :: %{Telemetry.Metrics.t() => Peep.metric_id()}
-
   @type ids_to_metrics() :: %{Peep.metric_id() => Telemetry.Metrics.t()}
   @type t() ::
           record(:persistent,
@@ -29,7 +26,6 @@ defmodule Peep.Persistent do
             storage: storage(),
             events_to_metrics: events_to_metrics(),
             ids_to_metrics: ids_to_metrics(),
-            metrics_to_ids: metrics_to_ids(),
             global_tags: map()
           )
 
@@ -56,8 +52,7 @@ defmodule Peep.Persistent do
 
     %{
       events_to_metrics: events_to_metrics,
-      ids_to_metrics: ids_to_metrics,
-      metrics_to_ids: metrics_to_ids
+      ids_to_metrics: ids_to_metrics
     } = Peep.assign_metric_ids(metrics)
 
     persistent(
@@ -65,7 +60,6 @@ defmodule Peep.Persistent do
       storage: storage,
       events_to_metrics: events_to_metrics,
       ids_to_metrics: ids_to_metrics,
-      metrics_to_ids: metrics_to_ids,
       global_tags: global_tags
     )
   end

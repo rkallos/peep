@@ -202,20 +202,18 @@ defmodule Peep do
       Enum.reverse(filtered_metrics),
       %{},
       %{},
-      %{},
       length(filtered_metrics)
     )
   end
 
-  defp assign_metric_ids([], events_to_metrics, ids_to_metrics, metrics_to_ids, _counter) do
+  defp assign_metric_ids([], events_to_metrics, ids_to_metrics, _counter) do
     %{
       events_to_metrics: events_to_metrics,
-      ids_to_metrics: ids_to_metrics,
-      metrics_to_ids: metrics_to_ids
+      ids_to_metrics: ids_to_metrics
     }
   end
 
-  defp assign_metric_ids([metric | rest], etm, itm, mti, counter) do
+  defp assign_metric_ids([metric | rest], etm, itm, counter) do
     %{event_name: event_name} = metric
 
     etm =
@@ -228,9 +226,8 @@ defmodule Peep do
       end
 
     itm = Map.put(itm, counter, metric)
-    mti = Map.put(mti, metric, counter)
 
-    assign_metric_ids(rest, etm, itm, mti, counter - 1)
+    assign_metric_ids(rest, etm, itm, counter - 1)
   end
 
   # callbacks

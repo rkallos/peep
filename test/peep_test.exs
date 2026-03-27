@@ -173,17 +173,14 @@ defmodule PeepTest do
     }
 
     expected_by_id = %{1 => c, 2 => s, 3 => d, 4 => l}
-    expected_by_metric = %{c => 1, s => 2, d => 3, l => 4}
 
     %{
       events_to_metrics: actual_by_event,
-      ids_to_metrics: actual_by_id,
-      metrics_to_ids: actual_by_metric
+      ids_to_metrics: actual_by_id
     } = Peep.assign_metric_ids(metrics)
 
     assert actual_by_event == expected_by_event
     assert actual_by_id == expected_by_id
-    assert actual_by_metric == expected_by_metric
   end
 
   test "Non-numeric values are dropped" do
