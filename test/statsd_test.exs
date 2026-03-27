@@ -4,24 +4,19 @@ defmodule StatsdTest do
   alias Peep.Statsd
   alias Telemetry.Metrics
 
-  alias Peep.Support.StorageCounter
-
   @impls [:default, :striped]
 
   for impl <- @impls do
     describe "#{impl} - global metadata" do
       test "is present in formatted output" do
         counter = Metrics.counter("statsd.test.counter", description: "a counter")
-        name = StorageCounter.fresh_id()
 
-        opts = [
-          name: name,
-          metrics: [counter],
-          storage: unquote(impl),
-          global_tags: %{foo: :bar}
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name =
+          Peep.Test.start_peep!(
+            metrics: [counter],
+            storage: unquote(impl),
+            global_tags: %{foo: :bar}
+          )
 
         for _ <- 1..10 do
           Peep.Test.insert_metric(name, counter, 1, %{bar: "quuz"})
@@ -33,16 +28,13 @@ defmodule StatsdTest do
 
       test "can be overridden by event metadata" do
         counter = Metrics.counter("statsd.test.counter", description: "a counter")
-        name = StorageCounter.fresh_id()
 
-        opts = [
-          name: name,
-          metrics: [counter],
-          storage: unquote(impl),
-          global_tags: %{foo: :bar}
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name =
+          Peep.Test.start_peep!(
+            metrics: [counter],
+            storage: unquote(impl),
+            global_tags: %{foo: :bar}
+          )
 
         for _ <- 1..10 do
           Peep.Test.insert_metric(name, counter, 1, %{foo: 2137, bar: "quuz"})
@@ -54,17 +46,8 @@ defmodule StatsdTest do
     end
 
     test "#{impl} - a counter can be formatted" do
-      name = StorageCounter.fresh_id()
-
       counter = Metrics.counter("statsd.test.counter")
-
-      opts = [
-        name: name,
-        metrics: [counter],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [counter], storage: unquote(impl))
 
       for i <- 1..10 do
         Peep.Test.insert_metric(name, counter, 1, %{})
@@ -79,17 +62,8 @@ defmodule StatsdTest do
     end
 
     test "#{impl} - a sum can be formatted" do
-      name = StorageCounter.fresh_id()
-
       sum = Metrics.sum("statsd.test.sum")
-
-      opts = [
-        name: name,
-        metrics: [sum],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [sum], storage: unquote(impl))
 
       for i <- 1..10 do
         Peep.Test.insert_metric(name, sum, 1, %{})
@@ -104,17 +78,8 @@ defmodule StatsdTest do
     end
 
     test "#{impl} - a last_value can be formatted" do
-      name = StorageCounter.fresh_id()
-
       last_value = Metrics.last_value("statsd.test.gauge")
-
-      opts = [
-        name: name,
-        metrics: [last_value],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [last_value], storage: unquote(impl))
 
       for i <- 1..10 do
         Peep.Test.insert_metric(name, last_value, i, %{})
@@ -129,17 +94,8 @@ defmodule StatsdTest do
     end
 
     test "#{impl} - a distribution can be formatted (standard)" do
-      name = StorageCounter.fresh_id()
-
       dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
-
-      opts = [
-        name: name,
-        metrics: [dist],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
 
       for i <- 1..1000 do
         Peep.Test.insert_metric(name, dist, i, %{})
@@ -199,17 +155,8 @@ defmodule StatsdTest do
     end
 
     test "#{impl} - a distribution can be formatted (datadog)" do
-      name = StorageCounter.fresh_id()
-
       dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
-
-      opts = [
-        name: name,
-        metrics: [dist],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
 
       for i <- 1..1000 do
         Peep.Test.insert_metric(name, dist, i, %{})
@@ -268,8 +215,6 @@ defmodule StatsdTest do
     end
 
     test "#{impl} - metrics are batched according to mtu option" do
-      name = StorageCounter.fresh_id()
-
       sum = fn i -> Metrics.sum("statsd.test.sum.#{i}") end
       last_value = fn i -> Metrics.last_value("statsd.test.gauge.#{i}") end
 
@@ -278,13 +223,7 @@ defmodule StatsdTest do
           [sum.(i), last_value.(i) | acc]
         end)
 
-      opts = [
-        name: name,
-        metrics: metrics,
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: metrics, storage: unquote(impl))
 
       for i <- 1..10 do
         sum = sum.(i)

@@ -4,23 +4,12 @@ defmodule StatsdCacheTest do
   alias Peep.Statsd.Cache
   alias Telemetry.Metrics
 
-  alias Peep.Support.StorageCounter
-
   @impls [:default, :striped]
 
   for impl <- @impls do
     test "#{impl} - a counter with no increments is omitted from delta" do
-      name = StorageCounter.fresh_id()
-
       counter = Metrics.counter("cache.test.counter")
-
-      opts = [
-        name: name,
-        metrics: [counter],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [counter], storage: unquote(impl))
 
       Peep.Test.insert_metric(name, counter, 1, %{})
 
@@ -39,17 +28,8 @@ defmodule StatsdCacheTest do
     end
 
     test "#{impl} - a sum with no increments is omitted from delta" do
-      name = StorageCounter.fresh_id()
-
       sum = Metrics.sum("cache.test.counter")
-
-      opts = [
-        name: name,
-        metrics: [sum],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [sum], storage: unquote(impl))
 
       Peep.Test.insert_metric(name, sum, 10, %{})
 
@@ -68,17 +48,8 @@ defmodule StatsdCacheTest do
     end
 
     test "#{impl} - a distribution with no samples is omitted from delta" do
-      name = StorageCounter.fresh_id()
-
       dist = Metrics.distribution("cache.test.dist", reporter_options: [max_value: 1000])
-
-      opts = [
-        name: name,
-        metrics: [dist],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
 
       Peep.Test.insert_metric(name, dist, 500, %{})
       Peep.Test.insert_metric(name, dist, 500, %{})
@@ -101,17 +72,8 @@ defmodule StatsdCacheTest do
     end
 
     test "#{impl} - a last_value with no changes is included in deltas" do
-      name = StorageCounter.fresh_id()
-
       last_value = Metrics.last_value("cache.test.gauge")
-
-      opts = [
-        name: name,
-        metrics: [last_value],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [last_value], storage: unquote(impl))
 
       Peep.Test.insert_metric(name, last_value, 10, %{})
 

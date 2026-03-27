@@ -20,6 +20,16 @@ defmodule Peep.Test do
 
   def insert_metric(_name, _metric, _value, _tags), do: nil
 
+  def fresh_id do
+    :"#{System.unique_integer([:positive])}"
+  end
+
+  def start_peep!(options) do
+    name = fresh_id()
+    {:ok, _pid} = Peep.start_link(Keyword.put(options, :name, name))
+    name
+  end
+
   def get_metric(all_metrics, metric, tags) do
     tags = to_map(tags)
     tags_map = Map.get(all_metrics, metric, %{})

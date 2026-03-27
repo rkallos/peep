@@ -4,8 +4,6 @@ defmodule PrometheusTest do
   alias Peep.Prometheus
   alias Telemetry.Metrics
 
-  alias Peep.Support.StorageCounter
-
   # Test struct that doesn't implement String.Chars
   defmodule TestError do
     defstruct [:reason, :code]
@@ -17,16 +15,13 @@ defmodule PrometheusTest do
     describe "#{impl} - global metadata" do
       test "is present in formatted output" do
         counter = Metrics.counter("prometheus.test.counter", description: "a counter")
-        name = StorageCounter.fresh_id()
 
-        opts = [
-          name: name,
-          metrics: [counter],
-          storage: unquote(impl),
-          global_tags: %{foo: :bar}
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name =
+          Peep.Test.start_peep!(
+            metrics: [counter],
+            storage: unquote(impl),
+            global_tags: %{foo: :bar}
+          )
 
         Peep.Test.insert_metric(name, counter, 1, %{baz: "quux"})
 
@@ -41,16 +36,13 @@ defmodule PrometheusTest do
 
       test "can be overridden by event metadata" do
         counter = Metrics.counter("prometheus.test.counter", description: "a counter")
-        name = StorageCounter.fresh_id()
 
-        opts = [
-          name: name,
-          metrics: [counter],
-          storage: unquote(impl),
-          global_tags: %{foo: :bar}
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name =
+          Peep.Test.start_peep!(
+            metrics: [counter],
+            storage: unquote(impl),
+            global_tags: %{foo: :bar}
+          )
 
         Peep.Test.insert_metric(name, counter, 1, %{foo: 2137, baz: "quux"})
 
@@ -66,15 +58,7 @@ defmodule PrometheusTest do
 
     test "#{impl} - counter formatting" do
       counter = Metrics.counter("prometheus.test.counter", description: "a counter")
-      name = StorageCounter.fresh_id()
-
-      opts = [
-        name: name,
-        metrics: [counter],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [counter], storage: unquote(impl))
 
       Peep.Test.insert_metric(name, counter, 1, %{foo: :bar, baz: "quux"})
 
@@ -89,16 +73,8 @@ defmodule PrometheusTest do
 
     describe "#{impl} - sum" do
       test "sum formatting" do
-        name = StorageCounter.fresh_id()
         sum = Metrics.sum("prometheus.test.sum", description: "a sum")
-
-        opts = [
-          name: name,
-          metrics: [sum],
-          storage: unquote(impl)
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name = Peep.Test.start_peep!(metrics: [sum], storage: unquote(impl))
 
         Peep.Test.insert_metric(name, sum, 5, %{foo: :bar, baz: "quux"})
         Peep.Test.insert_metric(name, sum, 3, %{foo: :bar, baz: "quux"})
@@ -113,21 +89,13 @@ defmodule PrometheusTest do
       end
 
       test "custom type" do
-        name = StorageCounter.fresh_id()
-
         sum =
           Metrics.sum("prometheus.test.sum",
             description: "a sum",
             reporter_options: [prometheus_type: "gauge"]
           )
 
-        opts = [
-          name: name,
-          metrics: [sum],
-          storage: unquote(impl)
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name = Peep.Test.start_peep!(metrics: [sum], storage: unquote(impl))
 
         Peep.Test.insert_metric(name, sum, 5, %{foo: :bar, baz: "quux"})
         Peep.Test.insert_metric(name, sum, 3, %{foo: :bar, baz: "quux"})
@@ -144,16 +112,8 @@ defmodule PrometheusTest do
 
     describe "#{impl} - last_value" do
       test "formatting" do
-        name = StorageCounter.fresh_id()
         last_value = Metrics.last_value("prometheus.test.gauge", description: "a last_value")
-
-        opts = [
-          name: name,
-          metrics: [last_value],
-          storage: unquote(impl)
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name = Peep.Test.start_peep!(metrics: [last_value], storage: unquote(impl))
 
         Peep.Test.insert_metric(name, last_value, 5, %{blee: :bloo, flee: "floo"})
 
@@ -167,21 +127,13 @@ defmodule PrometheusTest do
       end
 
       test "custom type" do
-        name = StorageCounter.fresh_id()
-
         last_value =
           Metrics.last_value("prometheus.test.gauge",
             description: "a last_value",
             reporter_options: [prometheus_type: :sum]
           )
 
-        opts = [
-          name: name,
-          metrics: [last_value],
-          storage: unquote(impl)
-        ]
-
-        {:ok, _pid} = Peep.start_link(opts)
+        name = Peep.Test.start_peep!(metrics: [last_value], storage: unquote(impl))
 
         Peep.Test.insert_metric(name, last_value, 5, %{blee: :bloo, flee: "floo"})
 
@@ -196,21 +148,13 @@ defmodule PrometheusTest do
     end
 
     test "#{impl} - dist formatting" do
-      name = StorageCounter.fresh_id()
-
       dist =
         Metrics.distribution("prometheus.test.distribution",
           description: "a distribution",
           reporter_options: [max_value: 1000]
         )
 
-      opts = [
-        name: name,
-        metrics: [dist],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
 
       expected = []
       assert export(name) == lines_to_string(expected)
@@ -315,8 +259,6 @@ defmodule PrometheusTest do
     end
 
     test "#{impl} - dist formatting pow10" do
-      name = StorageCounter.fresh_id()
-
       dist =
         Metrics.distribution("prometheus.test.distribution",
           description: "a distribution",
@@ -326,13 +268,7 @@ defmodule PrometheusTest do
           ]
         )
 
-      opts = [
-        name: name,
-        metrics: [dist],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
 
       expected = []
       assert export(name) == lines_to_string(expected)
@@ -388,21 +324,13 @@ defmodule PrometheusTest do
     end
 
     test "#{impl} - regression: label escaping" do
-      name = StorageCounter.fresh_id()
-
       counter =
         Metrics.counter(
           "prometheus.test.counter",
           description: "a counter"
         )
 
-      opts = [
-        name: name,
-        metrics: [counter],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [counter], storage: unquote(impl))
 
       Peep.Test.insert_metric(name, counter, 1, %{atom: "\"string\""})
       Peep.Test.insert_metric(name, counter, 1, %{"\"string\"" => :atom})
@@ -422,21 +350,13 @@ defmodule PrometheusTest do
     end
 
     test "#{impl} - regression: handle structs without String.Chars" do
-      name = StorageCounter.fresh_id()
-
       counter =
         Metrics.counter(
           "prometheus.test.counter",
           description: "a counter"
         )
 
-      opts = [
-        name: name,
-        metrics: [counter],
-        storage: unquote(impl)
-      ]
-
-      {:ok, _pid} = Peep.start_link(opts)
+      name = Peep.Test.start_peep!(metrics: [counter], storage: unquote(impl))
 
       # Create a struct that doesn't implement String.Chars
       error_struct = %TestError{reason: :tcp_closed, code: 1001}
