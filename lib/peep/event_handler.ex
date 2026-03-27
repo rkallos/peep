@@ -169,10 +169,6 @@ defmodule Peep.EventHandler do
   defp keep?(keep, metadata, _measurement) when is_function(keep, 1), do: keep.(metadata)
   defp keep?(_keep, _metadata, _measurement), do: true
 
-  defp fetch_measurement(%Telemetry.Metrics.Counter{}, _measurements, _metadata) do
-    1
-  end
-
   defp fetch_measurement(measurement, measurements, metadata) do
     case measurement do
       nil ->
