@@ -5,6 +5,12 @@ defmodule Peep.EventHandler do
 
   import Peep.Persistent, only: [persistent: 1]
 
+  require Peep.Handler.Config
+  require Peep.Handler.Metric
+
+  alias Peep.Handler.Config
+  alias Peep.Handler.Metric
+
   def attach(name) do
     persistent(
       events_to_metrics: metrics_by_event,
@@ -14,27 +20,12 @@ defmodule Peep.EventHandler do
     for {event_name, metrics} <- metrics_by_event do
       handler_id = handler_id(event_name, name)
 
-      {tag_fns, metrics_with_tag_fn_idx} = deduplicate_tag_fns(metrics)
-
-      metrics_rows =
-        Enum.map(metrics_with_tag_fn_idx, fn {metric, id, tag_idx} ->
-          %{measurement: measurement, keep: keep} = metric
-
-          keep_val = if is_nil(keep), do: :no_keep, else: keep
-
-          insert_fn = fn data, value, tags ->
-            storage_mod.insert_metric(data, id, metric, value, tags)
-          end
-
-          {metric_type(metric), insert_fn, keep_val, measurement, tag_idx}
-        end)
-
       :ok =
         :telemetry.attach(
           handler_id,
           event_name,
           &__MODULE__.handle_event/4,
-          {metrics_rows, storage_mod, storage, tag_fns}
+          Config.new(metrics, storage_mod, storage)
         )
 
       handler_id
@@ -54,11 +45,16 @@ defmodule Peep.EventHandler do
         _event,
         measurements,
         metadata,
-        {metrics_rows, storage_mod, storage, tag_fns}
+        Config.handler_config(
+          metrics: metrics,
+          storage_mod: storage_mod,
+          storage: storage,
+          tag_fns: tag_fns
+        )
       ) do
     resolved = storage_mod.resolve(storage)
     tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns), 0, [])
-    store_metrics(metrics_rows, measurements, metadata, storage_mod, resolved, tag_results)
+    store_metrics(metrics, measurements, metadata, resolved, tag_results)
   end
 
   defp compute_tags(_tag_fns, _metadata, size, size, acc) do
@@ -69,25 +65,39 @@ defmodule Peep.EventHandler do
     compute_tags(tag_fns, metadata, size, idx + 1, [elem(tag_fns, idx).(metadata) | acc])
   end
 
-  defp store_metrics([], _measurements, _metadata, _mod, _data, _tag_results), do: :ok
+  defp store_metrics([], _measurements, _metadata, _data, _tag_results), do: :ok
 
   defp store_metrics(
-         [{:counter, insert_fn, :no_keep, _measurement, tag_idx} | rest],
+         [
+           Metric.handler_metric(
+             type: :counter,
+             insert_fn: insert_fn,
+             keep: :no_keep,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
          measurements,
          metadata,
-         mod,
          data,
          tag_results
        ) do
     insert_fn.(data, 1, elem(tag_results, tag_idx))
-    store_metrics(rest, measurements, metadata, mod, data, tag_results)
+    store_metrics(rest, measurements, metadata, data, tag_results)
   end
 
   defp store_metrics(
-         [{_type, insert_fn, :no_keep, measurement, tag_idx} | rest],
+         [
+           Metric.handler_metric(
+             insert_fn: insert_fn,
+             keep: :no_keep,
+             measurement: measurement,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
          measurements,
          metadata,
-         mod,
          data,
          tag_results
        ) do
@@ -99,14 +109,21 @@ defmodule Peep.EventHandler do
         nil
     end
 
-    store_metrics(rest, measurements, metadata, mod, data, tag_results)
+    store_metrics(rest, measurements, metadata, data, tag_results)
   end
 
   defp store_metrics(
-         [{:counter, insert_fn, keep, _measurement, tag_idx} | rest],
+         [
+           Metric.handler_metric(
+             type: :counter,
+             insert_fn: insert_fn,
+             keep: keep,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
          measurements,
          metadata,
-         mod,
          data,
          tag_results
        ) do
@@ -114,14 +131,21 @@ defmodule Peep.EventHandler do
       insert_fn.(data, 1, elem(tag_results, tag_idx))
     end
 
-    store_metrics(rest, measurements, metadata, mod, data, tag_results)
+    store_metrics(rest, measurements, metadata, data, tag_results)
   end
 
   defp store_metrics(
-         [{_type, insert_fn, keep, measurement, tag_idx} | rest],
+         [
+           Metric.handler_metric(
+             insert_fn: insert_fn,
+             keep: keep,
+             measurement: measurement,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
          measurements,
          metadata,
-         mod,
          data,
          tag_results
        ) do
@@ -135,7 +159,7 @@ defmodule Peep.EventHandler do
       end
     end
 
-    store_metrics(rest, measurements, metadata, mod, data, tag_results)
+    store_metrics(rest, measurements, metadata, data, tag_results)
   end
 
   defp keep?(keep, metadata, measurement) when is_function(keep, 2),
@@ -166,42 +190,4 @@ defmodule Peep.EventHandler do
         end
     end
   end
-
-  defp deduplicate_tag_fns(metrics) do
-    {unique_metrics_tags, _} =
-      Enum.reduce(metrics, {%{}, 0}, fn {metric, _id}, {map, next_idx} ->
-        key = tag_fn_key(metric)
-
-        case map do
-          %{^key => _} -> {map, next_idx}
-          _ -> {Map.put(map, key, next_idx), next_idx + 1}
-        end
-      end)
-
-    tag_fns =
-      unique_metrics_tags
-      |> Enum.sort_by(fn {_key, idx} -> idx end)
-      |> Enum.map(fn {{tag_values, tags}, _idx} -> compile_tag_fn(tag_values, tags) end)
-      |> List.to_tuple()
-
-    metrics_with_tag_fn_idx =
-      Enum.map(metrics, fn {metric, id} ->
-        key = tag_fn_key(metric)
-        {metric, id, Map.fetch!(unique_metrics_tags, key)}
-      end)
-
-    {tag_fns, metrics_with_tag_fn_idx}
-  end
-
-  defp tag_fn_key(metric), do: {metric.tag_values, metric.tags}
-
-  defp compile_tag_fn(_tag_values, []), do: fn _metadata -> %{} end
-  defp compile_tag_fn(_tag_values, tags) when is_function(tags, 1), do: tags
-
-  defp compile_tag_fn(tag_values, keys) do
-    fn metadata -> Map.take(tag_values.(metadata), keys) end
-  end
-
-  defp metric_type(%Telemetry.Metrics.Counter{}), do: :counter
-  defp metric_type(_), do: :other
 end
