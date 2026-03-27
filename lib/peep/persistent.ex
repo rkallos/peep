@@ -92,12 +92,6 @@ defmodule Peep.Persistent do
   @spec ids_to_metrics(t()) :: ids_to_metrics()
   def ids_to_metrics(persistent(ids_to_metrics: itm)), do: itm
 
-  defmacro fast_fetch(name) when is_atom(name) do
-    quote do
-      :persistent_term.get(unquote(key(name)), nil)
-    end
-  end
-
   defp assign_metric_ids(metrics) do
     indexed =
       metrics
