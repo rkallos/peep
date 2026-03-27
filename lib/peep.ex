@@ -196,36 +196,23 @@ defmodule Peep do
   end
 
   def assign_metric_ids(metrics) do
-    filtered_metrics = Enum.filter(metrics, &allow_metric?/1)
+    indexed =
+      metrics
+      |> Enum.filter(&allow_metric?/1)
+      |> Enum.with_index()
 
-    assign_metric_ids(
-      Enum.reverse(filtered_metrics),
-      %{},
-      [],
-      length(filtered_metrics) - 1
-    )
-  end
+    events_to_metrics =
+      Enum.group_by(indexed, fn {metric, _id} -> metric.event_name end)
 
-  defp assign_metric_ids([], events_to_metrics, ids_to_metrics, _counter) do
+    ids_to_metrics =
+      indexed
+      |> Enum.map(fn {metric, _id} -> metric end)
+      |> List.to_tuple()
+
     %{
       events_to_metrics: events_to_metrics,
-      ids_to_metrics: List.to_tuple(ids_to_metrics)
+      ids_to_metrics: ids_to_metrics
     }
-  end
-
-  defp assign_metric_ids([metric | rest], etm, itm, counter) do
-    %{event_name: event_name} = metric
-
-    etm =
-      case etm do
-        %{^event_name => metrics} ->
-          %{etm | event_name => [{metric, counter} | metrics]}
-
-        _ ->
-          Map.put(etm, event_name, [{metric, counter}])
-      end
-
-    assign_metric_ids(rest, etm, [metric | itm], counter - 1)
   end
 
   # callbacks
