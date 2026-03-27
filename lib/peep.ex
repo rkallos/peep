@@ -195,26 +195,6 @@ defmodule Peep do
     true
   end
 
-  def assign_metric_ids(metrics) do
-    indexed =
-      metrics
-      |> Enum.filter(&allow_metric?/1)
-      |> Enum.with_index()
-
-    events_to_metrics =
-      Enum.group_by(indexed, fn {metric, _id} -> metric.event_name end)
-
-    ids_to_metrics =
-      indexed
-      |> Enum.map(fn {metric, _id} -> metric end)
-      |> List.to_tuple()
-
-    %{
-      events_to_metrics: events_to_metrics,
-      ids_to_metrics: ids_to_metrics
-    }
-  end
-
   # callbacks
 
   @impl true

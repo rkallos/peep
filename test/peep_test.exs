@@ -157,32 +157,6 @@ defmodule PeepTest do
     assert Peep.Persistent.fetch(name) == nil
   end
 
-  test "assign_ids" do
-    metrics =
-      [c, s, d, l] = [
-        Metrics.counter("one.two"),
-        Metrics.sum("one.two"),
-        Metrics.distribution("three.four"),
-        Metrics.last_value("five.six")
-      ]
-
-    expected_by_event = %{
-      [:one] => [{c, 0}, {s, 1}],
-      [:three] => [{d, 2}],
-      [:five] => [{l, 3}]
-    }
-
-    expected_by_id = {c, s, d, l}
-
-    %{
-      events_to_metrics: actual_by_event,
-      ids_to_metrics: actual_by_id
-    } = Peep.assign_metric_ids(metrics)
-
-    assert actual_by_event == expected_by_event
-    assert actual_by_id == expected_by_id
-  end
-
   test "Non-numeric values are dropped" do
     name = :"#{__MODULE__}_non_numeric_values"
 
