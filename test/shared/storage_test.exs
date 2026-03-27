@@ -295,7 +295,7 @@ defmodule Peep.Storage.Test do
   end
 
   defp start_peep!(options) do
-    name = System.unique_integer([:positive]) |> Integer.to_string() |> String.to_atom()
+    name = Peep.Support.StorageCounter.fresh_id()
 
     {:ok, _pid} = Peep.start_link(Keyword.put(options, :name, name))
     name

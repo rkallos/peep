@@ -62,7 +62,7 @@ defmodule CustomStorage do
   end
 
   def insert_metric(agents, id, %Metrics.LastValue{}, value, %{} = tags) do
-    agent = pick_agent(agents)
+    agent = elem(agents, 0)
     key = {id, tags}
 
     Agent.update(agent, fn state ->
