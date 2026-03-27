@@ -32,6 +32,9 @@ defmodule Peep.Storage.ETS do
   end
 
   @impl true
+  def resolve(tid), do: tid
+
+  @impl true
   def storage_size(tid) do
     %{
       size: :ets.info(tid, :size),

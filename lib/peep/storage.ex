@@ -32,4 +32,10 @@ defmodule Peep.Storage do
   have high cardinality.
   """
   @callback prune_tags(Enumerable.t(%{Metrics.tag() => term()}), map()) :: :ok
+
+  @doc """
+  Resolves storage to its per-scheduler form for the current scheduler.
+  Called once per event to avoid redundant scheduler lookups across metrics.
+  """
+  @callback resolve(term()) :: term()
 end

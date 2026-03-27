@@ -14,6 +14,9 @@ defmodule CustomStorage do
   alias Peep.Storage
 
   @impl true
+  def resolve(agents), do: agents
+
+  @impl true
   @spec new(non_neg_integer) :: tuple
   def new(n_agents) do
     for _ <- 1..n_agents do

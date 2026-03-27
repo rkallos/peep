@@ -107,7 +107,9 @@ defmodule Peep do
         storage: {storage_mod, storage},
         metrics_to_ids: %{^metric => id}
       ) ->
-        storage_mod.insert_metric(storage, id, metric, value, tags)
+        storage
+        |> storage_mod.resolve()
+        |> storage_mod.insert_metric(id, metric, value, tags)
 
       _ ->
         nil

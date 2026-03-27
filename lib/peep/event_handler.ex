@@ -56,8 +56,9 @@ defmodule Peep.EventHandler do
         metadata,
         {metrics_rows, storage_mod, storage, tag_fns}
       ) do
+    resolved = storage_mod.resolve(storage)
     tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns), 0, [])
-    store_metrics(metrics_rows, measurements, metadata, storage_mod, storage, tag_results)
+    store_metrics(metrics_rows, measurements, metadata, storage_mod, resolved, tag_results)
   end
 
   defp compute_tags(_tag_fns, _metadata, size, size, acc) do
