@@ -11,12 +11,13 @@ defmodule Peep.EventHandler do
   alias Peep.Handler.Config
   alias Peep.Handler.Metric
 
-  def attach(name) do
-    persistent(
-      events_to_metrics: metrics_by_event,
-      storage: {storage_mod, storage}
-    ) = Peep.Persistent.fetch(name)
-
+  def attach(
+        persistent(
+          name: name,
+          events_to_metrics: metrics_by_event,
+          storage: {storage_mod, storage}
+        )
+      ) do
     for {event_name, metrics} <- metrics_by_event do
       handler_id = handler_id(event_name, name)
 

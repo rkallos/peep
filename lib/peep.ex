@@ -202,11 +202,10 @@ defmodule Peep do
     Process.flag(:trap_exit, true)
     name = options.name
 
-    :ok =
-      Peep.Persistent.new(options)
-      |> Peep.Persistent.store()
+    peep_persistent = Peep.Persistent.new(options)
+    :ok = Peep.Persistent.store(peep_persistent)
 
-    handler_ids = EventHandler.attach(name)
+    handler_ids = EventHandler.attach(peep_persistent)
     :telemetry.persist()
 
     statsd_opts = options.statsd
