@@ -214,6 +214,23 @@ defmodule StatsdTest do
       assert parse_packets(packets) == parse_packets(expected)
     end
 
+    test "#{impl} - above-max distribution samples are excluded from output" do
+      dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 100])
+      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
+
+      # Insert one value within range, two above max_value
+      Peep.Test.insert_metric(name, dist, 50, %{})
+      Peep.Test.insert_metric(name, dist, 500, %{})
+      Peep.Test.insert_metric(name, dist, 5000, %{})
+
+      packets = get_statsd_packets(name, %{formatter: :standard})
+      parsed = parse_packets(packets)
+
+      # Only the in-range sample should produce a bucket line
+      assert MapSet.size(parsed) == 1
+      assert [%{name: "statsd.test.dist", type: :dist}] = MapSet.to_list(parsed)
+    end
+
     test "#{impl} - metrics are batched according to mtu option" do
       sum = fn i -> Metrics.sum("statsd.test.sum.#{i}") end
       last_value = fn i -> Metrics.last_value("statsd.test.gauge.#{i}") end
