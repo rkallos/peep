@@ -209,14 +209,10 @@ defmodule Peep do
     :telemetry.persist()
 
     statsd_opts = options.statsd
-    statsd_flush_interval = statsd_opts[:flush_interval_ms]
-
-    if statsd_flush_interval != nil do
-      set_statsd_timer(statsd_flush_interval)
-    end
 
     statsd_state =
-      if options.statsd do
+      if statsd_opts do
+        set_statsd_timer(statsd_opts.flush_interval_ms)
         Statsd.make_state(statsd_opts)
       else
         nil
