@@ -85,7 +85,7 @@ defmodule Peep do
               statsd_state: nil
   end
 
-  @type metric_id() :: pos_integer()
+  @type metric_id() :: non_neg_integer()
 
   def child_spec(options) do
     %{id: peep_name!(options), start: {__MODULE__, :start_link, [options]}}

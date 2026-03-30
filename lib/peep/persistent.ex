@@ -7,7 +7,7 @@ defmodule Peep.Persistent do
     :name,
     :storage,
     events_to_metrics: %{},
-    ids_to_metrics: %{},
+    ids_to_metrics: {},
     global_tags: %{}
   ])
 
