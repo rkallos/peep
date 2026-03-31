@@ -27,29 +27,27 @@ defmodule Peep.Storage.Atomics do
     )
   end
 
-  def insert(
-        atomic(
-          bucket_calculator: {module, config},
-          buckets: buckets,
-          sum: sum,
-          num_buckets: num_buckets,
-          above_max: above_max
-        ),
-        value
-      ) do
-    # :atomics indexes are 1-based.
-    # 1 is added for when calculate_bucket/2 returns 0
-    bucket_idx = module.bucket_for(value, config) + 1
+  defmacro insert(atomics_expr, value_expr) do
+    quote do
+      {:atomic, num_buckets, buckets, sum, above_max, {module, config}}
+        = unquote(atomics_expr)
 
-    case bucket_idx > num_buckets do
-      true ->
-        :atomics.add(above_max, 1, 1)
+      value = unquote(value_expr)
 
-      false ->
-        :atomics.add(buckets, bucket_idx, 1)
+      # :atomics indexes are 1-based.
+      # 1 is added for when calculate_bucket/2 returns 0
+      bucket_idx = module.bucket_for(value, config) + 1
+
+      case bucket_idx > num_buckets do
+        true ->
+          :atomics.add(above_max, 1, 1)
+
+        false ->
+          :atomics.add(buckets, bucket_idx, 1)
+      end
+
+      :atomics.add(sum, 1, round(value))
     end
-
-    :atomics.add(sum, 1, round(value))
   end
 
   def values(

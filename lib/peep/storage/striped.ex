@@ -6,6 +6,8 @@ defmodule Peep.Storage.Striped do
   memory usage. Recommended when executing thousands of metrics per second.
   """
 
+  require Peep.Storage.Atomics
+
   alias Telemetry.Metrics
   alias Peep.Storage
 
