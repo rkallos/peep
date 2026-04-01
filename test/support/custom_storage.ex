@@ -14,6 +14,9 @@ defmodule CustomStorage do
   alias Peep.Storage
 
   @impl true
+  def resolve(agents), do: agents
+
+  @impl true
   @spec new(non_neg_integer) :: tuple
   def new(n_agents) do
     for _ <- 1..n_agents do
@@ -59,7 +62,7 @@ defmodule CustomStorage do
   end
 
   def insert_metric(agents, id, %Metrics.LastValue{}, value, %{} = tags) do
-    agent = pick_agent(agents)
+    agent = elem(agents, 0)
     key = {id, tags}
 
     Agent.update(agent, fn state ->
@@ -150,7 +153,7 @@ defmodule CustomStorage do
   end
 
   defp group_metric({{id, tags}, Storage.Atomics.atomic() = atomics}, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
     values = Storage.Atomics.values(atomics)
 
     update_in(acc, [Access.key(metric, %{}), Access.key(tags, %{})], fn m1 ->
@@ -159,7 +162,7 @@ defmodule CustomStorage do
   end
 
   defp group_metric({{id, tags}, value}, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
 
     case metric do
       %Metrics.Counter{} ->

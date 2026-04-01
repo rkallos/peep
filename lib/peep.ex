@@ -85,7 +85,7 @@ defmodule Peep do
               statsd_state: nil
   end
 
-  @type metric_id() :: pos_integer()
+  @type metric_id() :: non_neg_integer()
 
   def child_spec(options) do
     %{id: peep_name!(options), start: {__MODULE__, :start_link, [options]}}
@@ -100,21 +100,6 @@ defmodule Peep do
         err
     end
   end
-
-  def insert_metric(name, metric, value, tags) when is_number(value) do
-    case Peep.Persistent.fetch(name) do
-      Peep.Persistent.persistent(
-        storage: {storage_mod, storage},
-        metrics_to_ids: %{^metric => id}
-      ) ->
-        storage_mod.insert_metric(storage, id, metric, value, tags)
-
-      _ ->
-        nil
-    end
-  end
-
-  def insert_metric(_name, _metric, _value, _tags), do: nil
 
   @doc """
   Returns measurements about the size of a running Peep's storage, in number of
@@ -154,9 +139,10 @@ defmodule Peep do
 
   defp extend_with(metrics, global_tags) do
     Map.new(metrics, fn {metric, measurements} ->
-      updated = Map.new(measurements, fn {tags, val} ->
-        {Map.merge(global_tags, tags), val}
-      end)
+      updated =
+        Map.new(measurements, fn {tags, val} ->
+          {Map.merge(global_tags, tags), val}
+        end)
 
       {metric, updated}
     end)
@@ -209,44 +195,6 @@ defmodule Peep do
     true
   end
 
-  def assign_metric_ids(metrics) do
-    filtered_metrics = Enum.filter(metrics, &allow_metric?/1)
-
-    assign_metric_ids(
-      Enum.reverse(filtered_metrics),
-      %{},
-      %{},
-      %{},
-      length(filtered_metrics)
-    )
-  end
-
-  defp assign_metric_ids([], events_to_metrics, ids_to_metrics, metrics_to_ids, _counter) do
-    %{
-      events_to_metrics: events_to_metrics,
-      ids_to_metrics: ids_to_metrics,
-      metrics_to_ids: metrics_to_ids
-    }
-  end
-
-  defp assign_metric_ids([metric | rest], etm, itm, mti, counter) do
-    %{event_name: event_name} = metric
-
-    etm =
-      case etm do
-        %{^event_name => metrics} ->
-          %{etm | event_name => [{metric, counter} | metrics]}
-
-        _ ->
-          Map.put(etm, event_name, [{metric, counter}])
-      end
-
-    itm = Map.put(itm, counter, metric)
-    mti = Map.put(mti, metric, counter)
-
-    assign_metric_ids(rest, etm, itm, mti, counter - 1)
-  end
-
   # callbacks
 
   @impl true
@@ -254,21 +202,17 @@ defmodule Peep do
     Process.flag(:trap_exit, true)
     name = options.name
 
-    :ok =
-      Peep.Persistent.new(options)
-      |> Peep.Persistent.store()
+    peep_persistent = Peep.Persistent.new(options)
+    :ok = Peep.Persistent.store(peep_persistent)
 
-    handler_ids = EventHandler.attach(name)
+    handler_ids = EventHandler.attach(peep_persistent)
+    :telemetry.persist()
 
     statsd_opts = options.statsd
-    statsd_flush_interval = statsd_opts[:flush_interval_ms]
-
-    if statsd_flush_interval != nil do
-      set_statsd_timer(statsd_flush_interval)
-    end
 
     statsd_state =
-      if options.statsd do
+      if statsd_opts do
+        set_statsd_timer(statsd_opts.flush_interval_ms)
         Statsd.make_state(statsd_opts)
       else
         nil

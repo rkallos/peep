@@ -4,8 +4,6 @@ defmodule PlugTest do
   import Plug.Test
   import Telemetry.Metrics
 
-  alias Peep.Support.StorageCounter
-
   describe "init/1" do
     test "should raise an error if peep_worker is not provided" do
       assert_raise KeyError, ~r/^key :peep_worker not found.*/, fn ->
@@ -111,7 +109,7 @@ defmodule PlugTest do
   end
 
   def setup_peep_worker(context) do
-    name = StorageCounter.fresh_id()
+    name = Peep.Test.fresh_id()
 
     start_supervised!(
       {Peep, name: name, metrics: [last_value("vm.memory.total", unit: :byte)]},

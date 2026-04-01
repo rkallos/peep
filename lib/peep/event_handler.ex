@@ -1,14 +1,24 @@
 defmodule Peep.EventHandler do
   @moduledoc false
 
-  @compile {:inline, keep?: 3, meta: 3, fetch_measurement: 3}
+  @compile {:inline, keep?: 3, fetch_measurement: 3}
 
   import Peep.Persistent, only: [persistent: 1]
 
-  def attach(name) do
-    persistent(events_to_metrics: metrics_by_event) = Peep.Persistent.fetch(name)
+  require Peep.Handler.Config
+  require Peep.Handler.Metric
 
-    for {event_name, _metrics} <- metrics_by_event do
+  alias Peep.Handler.Config
+  alias Peep.Handler.Metric
+
+  def attach(
+        persistent(
+          name: name,
+          events_to_metrics: metrics_by_event,
+          storage: {storage_mod, storage}
+        )
+      ) do
+    for {event_name, metrics} <- metrics_by_event do
       handler_id = handler_id(event_name, name)
 
       :ok =
@@ -16,7 +26,7 @@ defmodule Peep.EventHandler do
           handler_id,
           event_name,
           &__MODULE__.handle_event/4,
-          name
+          Config.new(metrics, storage_mod, storage)
         )
 
       handler_id
@@ -32,43 +42,125 @@ defmodule Peep.EventHandler do
     {__MODULE__, peep_name, event_name}
   end
 
-  def handle_event(event, measurements, metadata, name) do
-    persistent(
-      events_to_metrics: %{^event => metrics},
-      storage: {storage_mod, storage}
-    ) = Peep.Persistent.fetch(name)
-
-    store_metrics(metrics, measurements, metadata, storage_mod, storage)
+  def handle_event(
+        _event,
+        measurements,
+        metadata,
+        Config.handler_config(
+          metrics: metrics,
+          storage_mod: storage_mod,
+          storage: storage,
+          tag_fns: tag_fns
+        )
+      ) do
+    resolved = storage_mod.resolve(storage)
+    tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns) - 1, [])
+    store_metrics(metrics, measurements, metadata, resolved, tag_results)
   end
 
-  defp store_metrics([], _measurements, _metadata, _mod, _data), do: :ok
+  defp compute_tags(_tag_fns, _metadata, -1, acc) do
+    List.to_tuple(acc)
+  end
 
-  defp store_metrics([{metric, id} | rest], measurements, metadata, mod, data) do
-    %{
-      measurement: measurement,
-      tag_values: tag_values,
-      tags: tags,
-      keep: keep
-    } = metric
+  defp compute_tags(tag_fns, metadata, idx, acc) do
+    compute_tags(tag_fns, metadata, idx - 1, [elem(tag_fns, idx).(metadata) | acc])
+  end
 
-    if keep?(keep, metadata, measurement) do
-      # credo:disable-for-next-line Credo.Check.Refactor.Nesting
+  defp store_metrics([], _measurements, _metadata, _data, _tag_results), do: :ok
+
+  defp store_metrics(
+         [
+           Metric.handler_metric(
+             type: :counter,
+             insert_fn: insert_fn,
+             keep: :no_keep,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
+         measurements,
+         metadata,
+         data,
+         tag_results
+       ) do
+    insert_fn.(data, 1, elem(tag_results, tag_idx))
+    store_metrics(rest, measurements, metadata, data, tag_results)
+  end
+
+  defp store_metrics(
+         [
+           Metric.handler_metric(
+             insert_fn: insert_fn,
+             keep: :no_keep,
+             measurement: measurement,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
+         measurements,
+         metadata,
+         data,
+         tag_results
+       ) do
+    case fetch_measurement(measurement, measurements, metadata) do
+      value when is_number(value) ->
+        insert_fn.(data, value, elem(tag_results, tag_idx))
+
+      _ ->
+        nil
+    end
+
+    store_metrics(rest, measurements, metadata, data, tag_results)
+  end
+
+  defp store_metrics(
+         [
+           Metric.handler_metric(
+             type: :counter,
+             insert_fn: insert_fn,
+             keep: keep,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
+         measurements,
+         metadata,
+         data,
+         tag_results
+       ) do
+    if keep?(keep, metadata, nil) do
+      insert_fn.(data, 1, elem(tag_results, tag_idx))
+    end
+
+    store_metrics(rest, measurements, metadata, data, tag_results)
+  end
+
+  defp store_metrics(
+         [
+           Metric.handler_metric(
+             insert_fn: insert_fn,
+             keep: keep,
+             measurement: measurement,
+             tag_idx: tag_idx
+           )
+           | rest
+         ],
+         measurements,
+         metadata,
+         data,
+         tag_results
+       ) do
+    if keep?(keep, metadata, nil) do
       case fetch_measurement(measurement, measurements, metadata) do
         value when is_number(value) ->
-          mod.insert_metric(
-            data,
-            id,
-            metric,
-            value,
-            meta(metadata, tag_values, tags)
-          )
+          insert_fn.(data, value, elem(tag_results, tag_idx))
 
         _ ->
           nil
       end
     end
 
-    store_metrics(rest, measurements, metadata, mod, data)
+    store_metrics(rest, measurements, metadata, data, tag_results)
   end
 
   defp keep?(keep, metadata, measurement) when is_function(keep, 2),
@@ -76,15 +168,6 @@ defmodule Peep.EventHandler do
 
   defp keep?(keep, metadata, _measurement) when is_function(keep, 1), do: keep.(metadata)
   defp keep?(_keep, _metadata, _measurement), do: true
-
-  # When selected list is empty, just return empty map
-  defp meta(_tags, _map, []), do: %{}
-  defp meta(meta, _map, tags) when is_function(tags, 1), do: tags.(meta)
-  defp meta(tags, map, keys), do: Map.take(map.(tags), keys)
-
-  defp fetch_measurement(%Telemetry.Metrics.Counter{}, _measurements, _metadata) do
-    1
-  end
 
   defp fetch_measurement(measurement, measurements, metadata) do
     case measurement do

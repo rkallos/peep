@@ -6,6 +6,8 @@ defmodule Peep.Storage.Striped do
   memory usage. Recommended when executing thousands of metrics per second.
   """
 
+  require Peep.Storage.Atomics
+
   alias Telemetry.Metrics
   alias Peep.Storage
 
@@ -45,27 +47,29 @@ defmodule Peep.Storage.Striped do
   end
 
   @impl true
-  def insert_metric(tids, id, %Metrics.Counter{}, _value, %{} = tags) do
-    tid = get_tid(tids)
+  def resolve(tids) do
+    scheduler_id = :erlang.system_info(:scheduler_id)
+    elem(tids, scheduler_id - 1)
+  end
+
+  @impl true
+  def insert_metric(tid, id, %Metrics.Counter{}, _value, %{} = tags) do
     key = {id, tags}
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
   end
 
-  def insert_metric(tids, id, %Metrics.Sum{}, value, %{} = tags) do
-    tid = get_tid(tids)
+  def insert_metric(tid, id, %Metrics.Sum{}, value, %{} = tags) do
     key = {id, tags}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
   end
 
-  def insert_metric(tids, id, %Metrics.LastValue{}, value, %{} = tags) do
-    tid = get_tid(tids)
+  def insert_metric(tid, id, %Metrics.LastValue{}, value, %{} = tags) do
     now = System.monotonic_time()
     key = {id, tags}
     :ets.insert(tid, {key, {now, value}})
   end
 
-  def insert_metric(tids, id, %Metrics.Distribution{} = metric, value, %{} = tags) do
-    tid = get_tid(tids)
+  def insert_metric(tid, id, %Metrics.Distribution{} = metric, value, %{} = tags) do
     key = {id, tags}
 
     atomics =
@@ -91,11 +95,6 @@ defmodule Peep.Storage.Striped do
       end
 
     Storage.Atomics.insert(atomics, value)
-  end
-
-  defp get_tid(tids) do
-    scheduler_id = :erlang.system_info(:scheduler_id)
-    elem(tids, scheduler_id - 1)
   end
 
   @impl true
@@ -139,7 +138,7 @@ defmodule Peep.Storage.Striped do
   end
 
   defp add_metric({{id, _tags}, _value} = kv, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
     add_metric2(kv, metric, acc)
   end
 

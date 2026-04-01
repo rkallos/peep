@@ -24,14 +24,14 @@ defmodule Peep.Storage.Test do
     test "#{inspect(impl)} - a counter can be stored and retrieved" do
       counter = Metrics.counter("storage.test.counter")
 
-      name = start_peep!(storage: unquote(impl), metrics: [counter])
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: [counter])
 
       f = fn ->
         for i <- 1..10 do
-          Peep.insert_metric(name, counter, 1, %{})
+          Peep.Test.insert_metric(name, counter, 1, %{})
 
           if rem(i, 2) == 0 do
-            Peep.insert_metric(name, counter, 1, %{even: true})
+            Peep.Test.insert_metric(name, counter, 1, %{even: true})
           end
         end
       end
@@ -46,14 +46,14 @@ defmodule Peep.Storage.Test do
     test "#{inspect(impl)} - a sum can be stored and retrieved" do
       sum = Metrics.sum("storage.test.sum")
 
-      name = start_peep!(storage: unquote(impl), metrics: [sum])
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: [sum])
 
       f = fn ->
         for i <- 1..10 do
-          Peep.insert_metric(name, sum, 2, %{})
+          Peep.Test.insert_metric(name, sum, 2, %{})
 
           if rem(i, 2) == 0 do
-            Peep.insert_metric(name, sum, 3, %{even: true})
+            Peep.Test.insert_metric(name, sum, 3, %{even: true})
           end
         end
       end
@@ -68,14 +68,14 @@ defmodule Peep.Storage.Test do
     test "#{inspect(impl)} - a last_value can be stored and retrieved" do
       last_value = Metrics.last_value("storage.test.gauge")
 
-      name = start_peep!(storage: unquote(impl), metrics: [last_value])
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: [last_value])
 
       f = fn ->
         for i <- 1..10 do
-          Peep.insert_metric(name, last_value, i, %{})
+          Peep.Test.insert_metric(name, last_value, i, %{})
 
           if rem(i, 2) == 1 do
-            Peep.insert_metric(name, last_value, i, %{odd: true})
+            Peep.Test.insert_metric(name, last_value, i, %{odd: true})
           end
         end
       end
@@ -91,11 +91,11 @@ defmodule Peep.Storage.Test do
       dist =
         Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
 
-      name = start_peep!(storage: unquote(impl), metrics: [dist])
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: [dist])
 
       f = fn ->
         for i <- 0..2000 do
-          Peep.insert_metric(name, dist, i, %{})
+          Peep.Test.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -155,11 +155,11 @@ defmodule Peep.Storage.Test do
           ]
         )
 
-      name = start_peep!(storage: unquote(impl), metrics: [dist])
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: [dist])
 
       f = fn ->
         for i <- 0..1000 do
-          Peep.insert_metric(name, dist, i, %{})
+          Peep.Test.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -198,11 +198,11 @@ defmodule Peep.Storage.Test do
           ]
         )
 
-      name = start_peep!(storage: unquote(impl), metrics: [dist])
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: [dist])
 
       f = fn ->
         for i <- -500..500 do
-          Peep.insert_metric(name, dist, i, %{})
+          Peep.Test.insert_metric(name, dist, i, %{})
         end
       end
 
@@ -241,7 +241,7 @@ defmodule Peep.Storage.Test do
 
       metrics = [counter, sum, last_value, dist]
 
-      name = start_peep!(storage: unquote(impl), metrics: metrics)
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: metrics)
 
       tags_sets = [
         %{},
@@ -251,7 +251,7 @@ defmodule Peep.Storage.Test do
 
       for metric <- metrics, tags <- tags_sets do
         %{size: size_before, memory: mem_before} = Peep.storage_size(name)
-        Peep.insert_metric(name, metric, 5, tags)
+        Peep.Test.insert_metric(name, metric, 5, tags)
         %{size: size_after, memory: mem_after} = Peep.storage_size(name)
 
         assert size_after > size_before
@@ -269,12 +269,12 @@ defmodule Peep.Storage.Test do
 
       metrics = [counter, sum, last_value, dist]
 
-      name = start_peep!(storage: unquote(impl), metrics: metrics)
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: metrics)
 
       populate = fn ->
         for metric <- metrics do
-          Peep.insert_metric(name, metric, 5, %{foo: :bar})
-          Peep.insert_metric(name, metric, 5, %{baz: :quux})
+          Peep.Test.insert_metric(name, metric, 5, %{foo: :bar})
+          Peep.Test.insert_metric(name, metric, 5, %{baz: :quux})
         end
 
         assert Peep.get_all_metrics(name) != %{}
@@ -292,12 +292,5 @@ defmodule Peep.Storage.Test do
       assert Peep.prune_tags(name, [%{foo: :blah}, %{foo: :bar}, %{baz: :quux}]) == :ok
       assert Peep.get_all_metrics(name) == %{}
     end
-  end
-
-  defp start_peep!(options) do
-    name = System.unique_integer([:positive]) |> Integer.to_string() |> String.to_atom()
-
-    {:ok, _pid} = Peep.start_link(Keyword.put(options, :name, name))
-    name
   end
 end

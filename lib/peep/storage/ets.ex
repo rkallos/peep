@@ -32,6 +32,9 @@ defmodule Peep.Storage.ETS do
   end
 
   @impl true
+  def resolve(tid), do: tid
+
+  @impl true
   def storage_size(tid) do
     %{
       size: :ets.info(tid, :size),
@@ -125,17 +128,17 @@ defmodule Peep.Storage.ETS do
   end
 
   defp group_metric({{id, tags, _}, value}, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
     update_in(acc, [Access.key(metric, %{}), Access.key(tags, 0)], &(&1 + value))
   end
 
   defp group_metric({{id, tags}, Storage.Atomics.atomic() = atomics}, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
     put_in(acc, [Access.key(metric, %{}), Access.key(tags)], Storage.Atomics.values(atomics))
   end
 
   defp group_metric({{id, tags}, value}, itm, acc) do
-    %{^id => metric} = itm
+    metric = elem(itm, id)
     put_in(acc, [Access.key(metric, %{}), Access.key(tags)], value)
   end
 end

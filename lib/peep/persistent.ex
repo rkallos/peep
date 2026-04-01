@@ -7,8 +7,7 @@ defmodule Peep.Persistent do
     :name,
     :storage,
     events_to_metrics: %{},
-    ids_to_metrics: %{},
-    metrics_to_ids: %{},
+    ids_to_metrics: {},
     global_tags: %{}
   ])
 
@@ -20,16 +19,13 @@ defmodule Peep.Persistent do
   @typep events_to_metrics() :: %{
            :telemetry.event_name() => [{Telemetry.Metrics.t(), non_neg_integer()}]
          }
-  @typep metrics_to_ids() :: %{Telemetry.Metrics.t() => Peep.metric_id()}
-
-  @type ids_to_metrics() :: %{Peep.metric_id() => Telemetry.Metrics.t()}
+  @type ids_to_metrics() :: tuple()
   @type t() ::
           record(:persistent,
             name: name(),
             storage: storage(),
             events_to_metrics: events_to_metrics(),
             ids_to_metrics: ids_to_metrics(),
-            metrics_to_ids: metrics_to_ids(),
             global_tags: map()
           )
 
@@ -54,18 +50,13 @@ defmodule Peep.Persistent do
           {mod, mod.new(opts)}
       end
 
-    %{
-      events_to_metrics: events_to_metrics,
-      ids_to_metrics: ids_to_metrics,
-      metrics_to_ids: metrics_to_ids
-    } = Peep.assign_metric_ids(metrics)
+    {events_to_metrics, ids_to_metrics} = assign_metric_ids(metrics)
 
     persistent(
       name: name,
       storage: storage,
       events_to_metrics: events_to_metrics,
       ids_to_metrics: ids_to_metrics,
-      metrics_to_ids: metrics_to_ids,
       global_tags: global_tags
     )
   end
@@ -83,7 +74,7 @@ defmodule Peep.Persistent do
 
   @spec erase(name()) :: :ok
   def erase(name) when is_atom(name) do
-    :persistent_term.erase(name)
+    :persistent_term.erase(key(name))
     :ok
   end
 
@@ -101,10 +92,21 @@ defmodule Peep.Persistent do
   @spec ids_to_metrics(t()) :: ids_to_metrics()
   def ids_to_metrics(persistent(ids_to_metrics: itm)), do: itm
 
-  defmacro fast_fetch(name) when is_atom(name) do
-    quote do
-      :persistent_term.get(unquote(key(name)), nil)
-    end
+  defp assign_metric_ids(metrics) do
+    indexed =
+      metrics
+      |> Enum.filter(&Peep.allow_metric?/1)
+      |> Enum.with_index()
+
+    events_to_metrics =
+      Enum.group_by(indexed, fn {metric, _id} -> metric.event_name end)
+
+    ids_to_metrics =
+      indexed
+      |> Enum.map(fn {metric, _id} -> metric end)
+      |> List.to_tuple()
+
+    {events_to_metrics, ids_to_metrics}
   end
 
   defp key(name) when is_atom(name) do
