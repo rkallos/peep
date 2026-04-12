@@ -6,6 +6,10 @@ defmodule StatsdTest do
 
   @impls [:default, :striped]
 
+  test "starts successfully with statsd options configured" do
+    assert _name = Peep.Test.start_peep!(metrics: [], statsd: [host: "127.0.0.1", port: 8125])
+  end
+
   for impl <- @impls do
     describe "#{impl} - global metadata" do
       test "is present in formatted output" do

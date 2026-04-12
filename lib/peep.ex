@@ -212,7 +212,7 @@ defmodule Peep do
 
     statsd_state =
       if statsd_opts do
-        set_statsd_timer(statsd_opts.flush_interval_ms)
+        set_statsd_timer(statsd_opts[:flush_interval_ms])
         Statsd.make_state(statsd_opts)
       else
         nil
