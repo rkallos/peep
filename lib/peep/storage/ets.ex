@@ -59,31 +59,9 @@ defmodule Peep.Storage.ETS do
   end
 
   def insert_metric(tid, id, %Metrics.Distribution{} = metric, value, %{} = tags) do
-    key = {id, tags}
-
-    atomics =
-      case :ets.lookup(tid, key) do
-        [{_key, ref}] ->
-          ref
-
-        [] ->
-          # Race condition: Multiple processes could be attempting
-          # to write to this key. Thankfully, :ets.insert_new/2 will break ties,
-          # and concurrent writers should agree on which :atomics object to
-          # increment.
-          new_atomics = Storage.Atomics.new(metric)
-
-          case :ets.insert_new(tid, {key, new_atomics}) do
-            true ->
-              new_atomics
-
-            false ->
-              [{_key, atomics}] = :ets.lookup(tid, key)
-              atomics
-          end
-      end
-
-    Storage.Atomics.insert(atomics, value)
+    tid
+    |> lookup_or_insert_atomics({id, tags}, metric)
+    |> Storage.Atomics.insert(value)
   end
 
   @impl true
@@ -140,5 +118,27 @@ defmodule Peep.Storage.ETS do
   defp group_metric({{id, tags}, value}, itm, acc) do
     metric = elem(itm, id)
     put_in(acc, [Access.key(metric, %{}), Access.key(tags)], value)
+  end
+
+  defp lookup_or_insert_atomics(tid, key, metric) do
+    # shape: {key, atomics_ref}
+    pos = 2
+    case :ets.lookup_element(tid, key, pos, nil) do
+      nil ->
+        # Race condition: Multiple processes could be attempting
+        # to write to this key. Thankfully, :ets.insert_new/2 will break ties,
+        # and concurrent writers should agree on which :atomics object to
+        # increment.
+        new_atomics = Storage.Atomics.new(metric)
+
+        if :ets.insert_new(tid, {key, new_atomics}) do
+          new_atomics
+        else
+          :ets.lookup_element(tid, key, pos, nil)
+        end
+
+      ref ->
+        ref
+    end
   end
 end
