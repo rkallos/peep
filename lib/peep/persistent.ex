@@ -62,9 +62,15 @@ defmodule Peep.Persistent do
   end
 
   @spec store(t()) :: :ok
-  def store(persistent() = term) do
+  def store(persistent(storage: {mod, state}, ids_to_metrics: i2m) = term) do
     persistent(name: name) = term
     :persistent_term.put(key(name), term)
+
+    if function_exported?(mod, :register_metrics, 2) do
+      mod.register_metrics(state, with_bucket_boundaries(i2m))
+    end
+
+    :ok
   end
 
   @spec fetch(name()) :: t() | nil
@@ -107,6 +113,21 @@ defmodule Peep.Persistent do
       |> List.to_tuple()
 
     {events_to_metrics, ids_to_metrics}
+  end
+
+  defp with_bucket_boundaries(ids_to_metrics) do
+    ids_to_metrics
+    |> Tuple.to_list()
+    |> Enum.map(fn
+      %Telemetry.Metrics.Distribution{} = d ->
+        {mod, conf} = Peep.Buckets.config(d)
+        boundaries = mod.boundaries(conf)
+        Map.put(d, :peep_bucket_boundaries, boundaries)
+
+      metric ->
+        metric
+    end)
+    |> List.to_tuple()
   end
 
   defp key(name) when is_atom(name) do

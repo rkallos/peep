@@ -20,6 +20,9 @@ defmodule Peep.Buckets.Custom do
       end
 
       @impl true
+      def boundaries(_), do: unquote(buckets)
+
+      @impl true
       def config(_), do: %{}
 
       @impl true

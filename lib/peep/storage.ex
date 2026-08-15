@@ -34,8 +34,15 @@ defmodule Peep.Storage do
   @callback prune_tags(term(), [%{Metrics.tag() => term()}]) :: :ok
 
   @doc """
+  Passes the :persistent record (see `Peep.Persistent`) into the storage module.
+  """
+  @callback register_metrics(term(), Peep.Persistent.ids_to_metrics()) :: :ok
+
+  @doc """
   Resolves storage to its per-scheduler form for the current scheduler.
   Called once per event to avoid redundant scheduler lookups across metrics.
   """
   @callback resolve(term()) :: term()
+
+  @optional_callbacks register_metrics: 2
 end

@@ -17,6 +17,34 @@ defmodule Peep.Buckets.Exponential do
 
   alias Telemetry.Metrics
 
+  # `Peep.Buckets.boundaries/1`'s contract is exclusive-upper: a value
+  # belongs to the first bucket whose boundary it is strictly less than
+  # (matching `Peep.Buckets.Custom`'s own `val < boundary` clauses).
+  # `bucket_for/2` below is inclusive-upper instead (a value exactly equal
+  # to `gamma^bucket` stays in `bucket`, via `ceil/1`), so each boundary
+  # here is bumped to the next representable float above the true
+  # threshold - the exact technique for turning an inclusive floating-point
+  # bound into an exclusive one, not an approximation: since there is no
+  # representable float strictly between `x` and `next_up(x)`, `value <
+  # next_up(x)` is true for exactly the same values as `value <= x`.
+  @impl true
+  def boundaries(%{gamma: gamma} = config) do
+    for i <- 0..(number_of_buckets(config) - 1) do
+      next_up(:math.pow(gamma, i))
+    end
+  end
+
+  # The bit pattern of a positive, finite IEEE 754 double, read as an
+  # unsigned integer, is monotonically increasing with the float's value -
+  # incrementing it by one steps to the next representable float up.
+  # `gamma^i` is always positive (gamma > 1, i >= 0), so the general case
+  # (negative numbers, zero, infinities) doesn't need handling here.
+  defp next_up(x) when is_float(x) and x > 0.0 do
+    <<bits::unsigned-integer-64>> = <<x::float-64>>
+    <<next::float-64>> = <<bits + 1::unsigned-integer-64>>
+    next
+  end
+
   @impl true
   def config(%Metrics.Distribution{reporter_options: opts}) do
     max_value =

@@ -37,6 +37,7 @@ defmodule Peep.MixProject do
       {:nimble_options, "~> 1.1"},
       {:telemetry, "~> 1.4"},
       {:telemetry_metrics, "~> 1.0"},
+      {:rustler, "~> 0.38", runtime: false},
       # testing, docs, & linting
       {:bandit, "~> 1.6", only: [:test], runtime: false},
       {:benchee, "~> 1.5", only: [:dev], runtime: false},

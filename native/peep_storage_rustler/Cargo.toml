@@ -1,0 +1,12 @@
+[package]
+name = "peep_storage_rustler"
+version = "0.1.0"
+authors = []
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+hashbrown = "0.17.1"
+rustler = "0.38.0"

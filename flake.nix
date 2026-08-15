@@ -19,6 +19,8 @@
           packages = [
             beamPackages.erlang
             beamPackages.elixir_1_20
+            pkgs.rustc
+            pkgs.cargo
           ];
         };
       }
