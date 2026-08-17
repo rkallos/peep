@@ -60,6 +60,24 @@ defmodule Peep.Storage.Rustler do
   @impl true
   def prune_tags(_, _), do: :erlang.nif_error(:nif_not_loaded)
 
+  # No NIF here: `insert_metric`'s hot path needs to know which shard to
+  # write to, and there's no erl_nif equivalent of
+  # `:erlang.system_info(:scheduler_id)` to get that from Rust directly
+  # (`enif_thread_type/0` only says *what kind* of scheduler this is, not
+  # *which one*). So this stays exactly what `Peep.Storage.Striped.resolve/1`
+  # does - computed once per event, passed straight through to
+  # `insert_metric` as part of the resolved storage value.
   @impl true
-  def resolve(_), do: :erlang.nif_error(:nif_not_loaded)
+  def resolve(storage), do: {storage, :erlang.system_info(:scheduler_id) - 1}
+
+  # Temporary diagnostics, not part of `Peep.Storage`. Delete after use.
+  def debug_bare, do: :erlang.nif_error(:nif_not_loaded)
+  def debug_decode_args(_, _, _, _, _), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_decode_resolved_only(_), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_decode_storage_plain(_), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_decode_id_only(_), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_decode_terms_only(_, _, _), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_hash_tags(_, _, _, _, _), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_rwlock_only(_, _, _, _, _), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_lookup_no_atomic(_, _, _, _, _), do: :erlang.nif_error(:nif_not_loaded)
 end
