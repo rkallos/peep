@@ -157,6 +157,24 @@ defmodule PeepTest do
     assert Peep.Persistent.fetch(name) == nil
   end
 
+  test "metrics with a keep are only recorded for matching events" do
+    name = :"#{__MODULE__}_keep"
+    keep = fn metadata -> metadata[:kept] == true end
+
+    metrics = [counter, sum, gauge, unfiltered] = keep_metrics(name, keep)
+
+    {:ok, _pid} = Peep.start_link(name: name, metrics: metrics)
+
+    :telemetry.execute([name, :event], %{value: 10}, %{kept: true})
+    :telemetry.execute([name, :event], %{value: 99}, %{kept: false})
+
+    all = Peep.get_all_metrics(name)
+    assert Peep.Test.get_metric(all, counter, %{}) == 1
+    assert Peep.Test.get_metric(all, sum, %{}) == 10
+    assert Peep.Test.get_metric(all, gauge, %{}) == 10
+    assert Peep.Test.get_metric(all, unfiltered, %{}) == 2
+  end
+
   test "tag keys absent from metadata are omitted" do
     name = :"#{__MODULE__}_missing_tag_keys"
 
@@ -215,5 +233,16 @@ defmodule PeepTest do
     assert Peep.Test.get_metric(all, sum, []) == 0
     assert Peep.Test.get_metric(all, last_value, []) == nil
     assert Peep.Test.get_metric(all, dist, []) == nil
+  end
+
+  defp keep_metrics(name, keep) do
+    event = [name, :event]
+
+    [
+      Metrics.counter("#{name}.counter", event_name: event, keep: keep),
+      Metrics.sum("#{name}.sum", event_name: event, measurement: :value, keep: keep),
+      Metrics.last_value("#{name}.gauge", event_name: event, measurement: :value, keep: keep),
+      Metrics.counter("#{name}.unfiltered", event_name: event)
+    ]
   end
 end
