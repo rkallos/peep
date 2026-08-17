@@ -26,7 +26,7 @@ defmodule Peep.Storage.Striped do
       write_concurrency: false
     ]
 
-    n_schedulers = :erlang.system_info(:schedulers_online)
+    n_schedulers = :erlang.system_info(:schedulers)
     List.to_tuple(Enum.map(1..n_schedulers, fn _ -> :ets.new(__MODULE__, opts) end))
   end
 
