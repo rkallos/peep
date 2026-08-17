@@ -3,6 +3,19 @@ defmodule Peep.Storage do
   Behaviour for Peep storage backends. These functions are mainly called by Peep
   during normal functioning. Ordinary usage of Peep should not require calling
   any of these functions.
+
+  An implementation of Peep.Storage must implement one of:
+
+  * `c:insert_metric/5`
+  * `c:insert_metrics/3`
+
+  When Peep starts, it will see which of the above callbacks is exported, and
+  :telemetry event handlers will call the exported function.
+
+  Unless you have a good reason (e.g. your Peep.Storage implementation uses
+  NIFs), prefer `c:insert_metric/5`. `c:insert_metrics/3` builds a list with one
+  tuple per metric for each event, which only pays off when a call into the
+  backend is expensive enough to be worth amortizing.
   """
   alias Telemetry.Metrics
 
@@ -17,9 +30,28 @@ defmodule Peep.Storage do
   @callback storage_size(term()) :: %{size: non_neg_integer(), memory: non_neg_integer()}
 
   @doc """
-  Stores a sample metric
+  Stores a single sample.
+
+  Called once per metric of an event.
   """
-  @callback insert_metric(term(), Peep.metric_id(), Metrics.t(), term(), map()) :: any()
+  @callback insert_metric(
+              storage :: term(),
+              Peep.metric_id(),
+              Metrics.t(),
+              value :: number(),
+              tags :: map()
+            ) :: any()
+
+  @doc """
+  Stores every sample belonging to a single telemetry event.
+
+  A sample's tags are `elem(tag_results, tag_idx)`.
+  """
+  @callback insert_metrics(
+              storage :: term(),
+              tag_results :: tuple(),
+              [{Peep.metric_id(), Metrics.t(), number(), tag_idx :: non_neg_integer()}]
+            ) :: any()
 
   @doc """
   Retrieves all stored metrics
@@ -38,4 +70,26 @@ defmodule Peep.Storage do
   Called once per event to avoid redundant scheduler lookups across metrics.
   """
   @callback resolve(term()) :: term()
+
+  @optional_callbacks insert_metric: 5, insert_metrics: 3
+
+  @doc false
+  @spec insert_shape(module()) :: :batched | :per_metric
+  def insert_shape(storage_mod) do
+    cond do
+      not Code.ensure_loaded?(storage_mod) ->
+        raise ArgumentError, "storage module #{inspect(storage_mod)} could not be loaded"
+
+      function_exported?(storage_mod, :insert_metrics, 3) ->
+        :batched
+
+      function_exported?(storage_mod, :insert_metric, 5) ->
+        :per_metric
+
+      true ->
+        raise ArgumentError,
+              "storage module #{inspect(storage_mod)} exports neither " <>
+                "insert_metric/5 nor insert_metrics/3"
+    end
+  end
 end

@@ -11,9 +11,7 @@ defmodule Peep.Test do
       ) ->
         case find_metric_id(ids_to_metrics, metric) do
           {:ok, id} ->
-            storage
-            |> storage_mod.resolve()
-            |> storage_mod.insert_metric(id, metric, value, tags)
+            insert_one(storage_mod, storage, id, metric, value, tags)
 
           :error ->
             nil
@@ -25,6 +23,15 @@ defmodule Peep.Test do
   end
 
   def insert_metric(_name, _metric, _value, _tags), do: nil
+
+  defp insert_one(storage_mod, storage, id, metric, value, tags) do
+    resolved = storage_mod.resolve(storage)
+
+    case Peep.Storage.insert_shape(storage_mod) do
+      :batched -> storage_mod.insert_metrics(resolved, {tags}, [{id, metric, value, 0}])
+      :per_metric -> storage_mod.insert_metric(resolved, id, metric, value, tags)
+    end
+  end
 
   defp find_metric_id(ids_to_metrics, metric) do
     find_metric_id(ids_to_metrics, metric, tuple_size(ids_to_metrics), 0)
