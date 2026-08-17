@@ -18,6 +18,8 @@ defmodule Peep.EventHandler do
           storage: {storage_mod, storage}
         )
       ) do
+    handler_fn = handler_fn(storage_mod)
+
     for {event_name, metrics} <- metrics_by_event do
       handler_id = handler_id(event_name, name)
 
@@ -25,11 +27,18 @@ defmodule Peep.EventHandler do
         :telemetry.attach(
           handler_id,
           event_name,
-          &__MODULE__.handle_event/4,
+          handler_fn,
           Config.new(metrics, storage_mod, storage)
         )
 
       handler_id
+    end
+  end
+
+  defp handler_fn(storage_mod) do
+    case Peep.Storage.insert_shape(storage_mod) do
+      :batched -> &__MODULE__.handle_event_batched/4
+      :per_metric -> &__MODULE__.handle_event/4
     end
   end
 
@@ -58,6 +67,23 @@ defmodule Peep.EventHandler do
     store_metrics(metrics, measurements, metadata, resolved, tag_results)
   end
 
+  def handle_event_batched(
+        _event,
+        measurements,
+        metadata,
+        Config.handler_config(
+          metrics: metrics,
+          storage_mod: storage_mod,
+          storage: storage,
+          tag_fns: tag_fns
+        )
+      ) do
+    resolved = storage_mod.resolve(storage)
+    tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns) - 1, [])
+    batch = build_batch(metrics, measurements, metadata, [])
+    storage_mod.insert_metrics(resolved, tag_results, batch)
+  end
+
   defp compute_tags(_tag_fns, _metadata, -1, acc) do
     List.to_tuple(acc)
   end
@@ -67,6 +93,7 @@ defmodule Peep.EventHandler do
   end
 
   defp store_metrics([], _measurements, _metadata, _data, _tag_results), do: :ok
+  defp build_batch([], _measurements, _metadata, acc), do: acc
 
   # Order matters; literal :no_keep and :counter clauses must precede the catch-alls.
   clause_order = [
@@ -77,7 +104,7 @@ defmodule Peep.EventHandler do
   ]
 
   # Dialyzer sees the `if true` and `case 1` the template leaves before the compiler folds them.
-  @dialyzer {:no_match, store_metrics: 5}
+  @dialyzer {:no_match, store_metrics: 5, build_batch: 4}
 
   for %{keep?: keep?, counter?: counter?} <- clause_order do
     type = if counter?, do: :counter, else: quote(do: _)
@@ -118,6 +145,35 @@ defmodule Peep.EventHandler do
       end
 
       store_metrics(rest, measurements, metadata, data, tag_results)
+    end
+
+    defp build_batch(
+           [
+             Metric.handler_metric(
+               type: unquote(type),
+               id: id,
+               metric: metric,
+               keep: unquote(keep),
+               measurement: unquote(measurement),
+               tag_idx: tag_idx
+             )
+             | rest
+           ],
+           measurements,
+           metadata,
+           acc
+         ) do
+      acc =
+        if unquote(kept?) do
+          case unquote(value) do
+            value when is_number(value) -> [{id, metric, value, tag_idx} | acc]
+            _ -> acc
+          end
+        else
+          acc
+        end
+
+      build_batch(rest, measurements, metadata, acc)
     end
   end
 
