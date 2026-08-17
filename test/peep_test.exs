@@ -175,6 +175,29 @@ defmodule PeepTest do
     assert Peep.Test.get_metric(all, unfiltered, %{}) == 2
   end
 
+  test "a 2-arity keep is passed the event's measurements" do
+    name = :"#{__MODULE__}_keep_measurements"
+    parent = self()
+
+    keep = fn metadata, measurements ->
+      send(parent, {:keep, metadata, measurements})
+      measurements[:value] == 10
+    end
+
+    metrics = [counter | _] = keep_metrics(name, keep)
+
+    {:ok, _pid} = Peep.start_link(name: name, metrics: metrics)
+
+    :telemetry.execute([name, :event], %{value: 10}, %{kept: true})
+    :telemetry.execute([name, :event], %{value: 99}, %{kept: true})
+
+    assert_received {:keep, %{kept: true}, %{value: 10}}
+    assert_received {:keep, %{kept: true}, %{value: 99}}
+
+    all = Peep.get_all_metrics(name)
+    assert Peep.Test.get_metric(all, counter, %{}) == 1
+  end
+
   test "tag keys absent from metadata are omitted" do
     name = :"#{__MODULE__}_missing_tag_keys"
 

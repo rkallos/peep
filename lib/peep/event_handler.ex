@@ -128,7 +128,7 @@ defmodule Peep.EventHandler do
          data,
          tag_results
        ) do
-    if keep?(keep, metadata, nil) do
+    if keep?(keep, metadata, measurements) do
       insert_fn.(data, 1, elem(tag_results, tag_idx))
     end
 
@@ -150,7 +150,7 @@ defmodule Peep.EventHandler do
          data,
          tag_results
        ) do
-    if keep?(keep, metadata, nil) do
+    if keep?(keep, metadata, measurements) do
       case fetch_measurement(measurement, measurements, metadata) do
         value when is_number(value) ->
           insert_fn.(data, value, elem(tag_results, tag_idx))
