@@ -15,6 +15,29 @@ defmodule Peep.Storage.Rustler do
   @impl true
   def insert_metric(_, _, _, _, _), do: :erlang.nif_error(:nif_not_loaded)
 
+  # Batched-insert prototypes under evaluation, not (yet) part of `Peep.Storage`.
+  def insert_metrics_flat(_resolved, _batch), do: :erlang.nif_error(:nif_not_loaded)
+
+  def insert_metrics_tagged(_resolved, _tag_results, _batch),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  # Measurement scaffolding for the "one Storage per scheduler, no locks"
+  # question - prices the per-shard RwLock and the atomic RMW. Not safe to
+  # call concurrently; single-threaded benchmarks only.
+  def insert_counter_unlocked_atomic(_resolved, _id, _tags),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def insert_counter_unlocked_plain(_resolved, _id, _tags),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def insert_counters_unlocked_plain(_resolved, _batch), do: :erlang.nif_error(:nif_not_loaded)
+  def insert_counters_unlocked_atomic(_resolved, _batch), do: :erlang.nif_error(:nif_not_loaded)
+  def insert_counters_dummy_locked(_resolved, _batch), do: :erlang.nif_error(:nif_not_loaded)
+  def insert_counters_pl_locked(_resolved, _batch), do: :erlang.nif_error(:nif_not_loaded)
+  def insert_counter_thread_local(_storage, _id, _tags), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_thread_local(_storage), do: :erlang.nif_error(:nif_not_loaded)
+  def debug_thread_shard, do: :erlang.nif_error(:nif_not_loaded)
+
   # `persistent` carries the whole `:persistent` record, but the NIF only
   # needs `ids_to_metrics` out of it - extracted here, via the proper
   # accessor, rather than parsed positionally out of the record on the Rust

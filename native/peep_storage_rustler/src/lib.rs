@@ -3,6 +3,7 @@ use rustler::sys::{enif_monotonic_time, enif_system_info, ErlNifSysInfo, ErlNifT
 use rustler::types::map::MapIterator;
 use rustler::types::tuple::get_tuple;
 use rustler::{Atom, Encoder, Env, NifMap, Resource, ResourceArc, Term, TermType};
+use std::cell::{Cell, UnsafeCell};
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::mem::size_of;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -60,6 +61,125 @@ struct Storage {
     // `insert_metric` path without needing a lock that's only ever
     // contended during that one-time setup.
     registered: OnceLock<RegisteredMetrics>,
+
+    // MEASUREMENT SCAFFOLDING, not part of the real storage - see
+    // `UnsyncSlots`. Prices what the per-shard `RwLock` and the atomic RMW
+    // cost by offering the same lookup with neither.
+    unsync: OnceLock<UnsyncSlots>,
+}
+
+/// Deliberately-unsound `Sync` wrapper, so an `UnsafeCell` can live inside a
+/// `Resource`. Exists only to measure the cost of the synchronization the
+/// real hot path pays: nothing here is safe to drive from more than one
+/// thread, and the benchmarks that use it write from one thread at a time.
+struct UnsyncCell<T>(UnsafeCell<T>);
+
+// SAFETY: not actually safe. See above - measurement scaffolding only.
+unsafe impl<T> Sync for UnsyncCell<T> {}
+
+// Same caveat: asserted purely so this scaffolding can live in a `Resource`.
+impl<T> std::panic::RefUnwindSafe for UnsyncCell<T> {}
+
+impl<T> UnsyncCell<T> {
+    #[inline]
+    fn get(&self) -> *mut T {
+        self.0.get()
+    }
+
+    fn shards(n_shards: usize) -> Box<[CachePadded<Self>]>
+    where
+        T: Default,
+    {
+        (0..n_shards)
+            .map(|_| CachePadded(UnsyncCell(UnsafeCell::new(T::default()))))
+            .collect()
+    }
+}
+
+type PlainCounterMap = HashMap<TagsKey, i64, TermHashBuilder>;
+type UnlockedAtomicMap = HashMap<TagsKey, AtomicI64, TermHashBuilder>;
+
+/// Two parallel shadow copies of the Counter storage, one per metric id, each
+/// sharded per scheduler exactly like the real `Counters`:
+///
+///   * `unlocked_atomic` - no `RwLock`, values still `AtomicI64`
+///   * `unlocked_plain`  - no `RwLock`, values plain `i64`
+///
+/// Differencing the three insert paths (real, `unlocked_atomic`,
+/// `unlocked_plain`) separates the lock's cost from the atomic's.
+struct UnsyncSlots {
+    unlocked_atomic: Vec<Box<[CachePadded<UnsyncCell<UnlockedAtomicMap>>]>>,
+    unlocked_plain: Vec<Box<[CachePadded<UnsyncCell<PlainCounterMap>>]>>,
+    // Locks guarding nothing, taken around the *same* unsynchronized insert
+    // `unlocked_atomic` does. The only difference between
+    // `insert_counters_unlocked_atomic` and `insert_counters_dummy_locked` is
+    // the read guard, so differencing them prices `RwLock::read` and its guard
+    // drop and nothing else.
+    dummy_locks: Vec<Box<[CachePadded<RwLock<()>>]>>,
+    // Same, but `parking_lot`'s RwLock rather than std's, to test whether the
+    // cost is inherent to reader-writer locking or specific to std's macOS
+    // implementation.
+    dummy_pl_locks: Vec<Box<[CachePadded<PlLock>]>>,
+}
+
+/// `parking_lot::RwLock` isn't `RefUnwindSafe`, which a `Resource` field has to
+/// be. Asserted here purely so this scaffolding can be measured.
+struct PlLock(parking_lot::RwLock<()>);
+
+impl std::panic::RefUnwindSafe for PlLock {}
+
+impl PlLock {
+    #[inline]
+    fn read(&self) -> parking_lot::RwLockReadGuard<'_, ()> {
+        self.0.read()
+    }
+}
+
+impl UnsyncSlots {
+    fn new(n_metrics: usize, n_shards: usize) -> Self {
+        UnsyncSlots {
+            unlocked_atomic: (0..n_metrics).map(|_| UnsyncCell::shards(n_shards)).collect(),
+            unlocked_plain: (0..n_metrics).map(|_| UnsyncCell::shards(n_shards)).collect(),
+            dummy_locks: (0..n_metrics)
+                .map(|_| {
+                    (0..n_shards)
+                        .map(|_| CachePadded(RwLock::new(())))
+                        .collect()
+                })
+                .collect(),
+            dummy_pl_locks: (0..n_metrics)
+                .map(|_| {
+                    (0..n_shards)
+                        .map(|_| CachePadded(PlLock(parking_lot::RwLock::new(()))))
+                        .collect()
+                })
+                .collect(),
+        }
+    }
+}
+
+// A shard index owned by the OS thread itself, rather than handed in from
+// Elixir. Assigned on first use from `NEXT_THREAD_SHARD`. This is the
+// alternative to `resolve/1`'s `:erlang.system_info(:scheduler_id)`: a
+// scheduler id read in Elixir can go stale (the process may be preempted and
+// migrated between `resolve/1` and the insert), whereas a thread-local is by
+// construction the thread actually executing the NIF.
+thread_local! {
+    static THREAD_SHARD: Cell<usize> = const { Cell::new(usize::MAX) };
+}
+
+static NEXT_THREAD_SHARD: AtomicU64 = AtomicU64::new(0);
+
+#[inline]
+fn thread_shard(n_shards: usize) -> usize {
+    THREAD_SHARD.with(|cell| match cell.get() {
+        usize::MAX => {
+            let assigned = NEXT_THREAD_SHARD.fetch_add(1, Ordering::Relaxed) as usize % n_shards;
+            cell.set(assigned);
+            assigned
+        }
+        shard => shard,
+    })
 }
 
 struct RegisteredMetrics {
@@ -443,9 +563,8 @@ impl Counters {
     /// (e.g. `+1`/`-1` for something like an active-connection count) -
     /// same reason `Peep.Storage.ETS` passes signed values straight through
     /// to `:ets.update_counter/4`. `Counter` always calls this with `1`.
-    fn increment(&self, shard_id: usize, tags: Term, delta: i64) {
+    fn increment(&self, shard_id: usize, tags: Term, hash: u64, delta: i64) {
         let map_lock = &self.shards[shard_id];
-        let hash = tags.hash_internal(0) as u64;
 
         // Fast path: tags we've already seen. Read lock only - the
         // `&AtomicI64` we get back is borrowed from the guard, so the
@@ -501,9 +620,8 @@ impl LastValues {
     /// still means *our* value has to end up stored, not the other
     /// thread's. So the slow path matches `Occupied`/`Vacant` explicitly
     /// and always writes `value` either way.
-    fn set(&self, shard_id: usize, tags: Term, value: TagValue) {
+    fn set(&self, shard_id: usize, tags: Term, hash: u64, value: TagValue) {
         let map_lock = &self.shards[shard_id];
-        let hash = tags.hash_internal(0) as u64;
         let timestamp = monotonic_time_ns();
 
         // Fast path: tags already known (on this shard). Read lock on the
@@ -599,12 +717,10 @@ impl Distributions {
     /// measurement always *accumulates* into a cell, so "someone else
     /// already created this entry, record into it" is correct regardless
     /// of who won the race to create it.
-    fn insert(&self, shard_id: usize, arena: &[f64], tags: Term, value: f64) {
+    fn insert(&self, shard_id: usize, arena: &[f64], tags: Term, hash: u64, value: f64) {
         let (offset, len) = self.boundaries;
         let boundaries = &arena[offset..offset + len];
         let map_lock = &self.shards[shard_id];
-
-        let hash = tags.hash_internal(0) as u64;
 
         // Fast path: tags we've already seen (on this shard). Read lock
         // only - `record` only ever touches already-allocated atomics,
@@ -635,6 +751,7 @@ impl Distributions {
 fn new(_opts: Term) -> ResourceArc<Storage> {
     ResourceArc::new(Storage {
         registered: OnceLock::new(),
+        unsync: OnceLock::new(),
     })
 }
 
@@ -655,10 +772,14 @@ fn register_metrics(storage: &Storage, ids_to_metrics: Term) -> Atom {
         boundaries_arena: boundaries_arena.into_boxed_slice(),
     };
 
+    let n_metrics = registered.metrics.len();
+
     storage
         .registered
         .set(registered)
         .unwrap_or_else(|_| panic!("register_metrics must only be called once"));
+
+    let _ = storage.unsync.set(UnsyncSlots::new(n_metrics, n_shards));
 
     rustler::types::atom::ok()
 }
@@ -704,6 +825,40 @@ fn storage_size(storage: &Storage) -> StorageSize {
     StorageSize { size, memory }
 }
 
+/// The per-sample work shared by `insert_metric` and the batched prototypes:
+/// everything after the id/value/tags/hash for one sample are in hand.
+#[inline]
+fn store_one(
+    registered: &RegisteredMetrics,
+    shard_id: usize,
+    id: usize,
+    value: Term,
+    tags: Term,
+    hash: u64,
+) {
+    match registered.metrics.get(id) {
+        Some(MetricSlot::Counter(counters)) => counters.increment(shard_id, tags, hash, 1),
+        Some(MetricSlot::Sum(counters)) => {
+            let delta: i64 = value.decode().expect("sum value must be an integer");
+            counters.increment(shard_id, tags, hash, delta);
+        }
+        Some(MetricSlot::LastValue(last_values)) => {
+            last_values.set(shard_id, tags, hash, TagValue::decode(value));
+        }
+        Some(MetricSlot::Distribution(distributions)) => {
+            let measurement: f64 = value.decode().expect("distribution value must be a number");
+            distributions.insert(
+                shard_id,
+                &registered.boundaries_arena,
+                tags,
+                hash,
+                measurement,
+            );
+        }
+        None => panic!("no metric registered for id {id}"),
+    }
+}
+
 #[rustler::nif]
 fn insert_metric(
     resolved: (&Storage, usize),
@@ -718,23 +873,290 @@ fn insert_metric(
         .get()
         .expect("register_metrics must be called before insert_metric");
 
-    match registered.metrics.get(id) {
-        Some(MetricSlot::Counter(counters)) => counters.increment(shard_id, tags, 1),
-        Some(MetricSlot::Sum(counters)) => {
-            let delta: i64 = value.decode().expect("sum value must be an integer");
-            counters.increment(shard_id, tags, delta);
-        }
-        Some(MetricSlot::LastValue(last_values)) => {
-            last_values.set(shard_id, tags, TagValue::decode(value));
-        }
-        Some(MetricSlot::Distribution(distributions)) => {
-            let measurement: f64 = value.decode().expect("distribution value must be a number");
-            distributions.insert(shard_id, &registered.boundaries_arena, tags, measurement);
-        }
-        None => panic!("no metric registered for id {id}"),
+    store_one(registered, shard_id, id, value, tags, tags.hash_internal(0) as u64);
+
+    rustler::types::atom::ok()
+}
+
+/// Prototype A: one NIF call per event, `batch` being a list of
+/// `{id, value, tags}` tuples. Amortizes the call trap and the resource
+/// decode across every sample in the event, but still hashes each sample's
+/// tags map independently.
+#[rustler::nif]
+fn insert_metrics_flat(resolved: (&Storage, usize), batch: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let registered = storage
+        .registered
+        .get()
+        .expect("register_metrics must be called before insert_metrics");
+
+    // `Term::decode` into a Rust tuple, *not* `get_tuple` - the latter
+    // allocates a `Vec<Term>` per item, which on this path is a malloc per
+    // metric per event.
+    for item in batch.into_list_iterator().expect("batch must be a list") {
+        let (id, value, tags): (usize, Term, Term) =
+            item.decode().expect("batch items must be {id, value, tags} tuples");
+        store_one(registered, shard_id, id, value, tags, tags.hash_internal(0) as u64);
     }
 
     rustler::types::atom::ok()
+}
+
+/// Prototype C: like A, but the event's distinct tags maps are passed once,
+/// as a tuple, and each batch item references one by index - so a tags map
+/// shared by several metrics in the same event is hashed once rather than
+/// once per metric. Mirrors the `tag_fns`/`tag_idx` deduplication
+/// `Peep.Handler.Config` already does on the Elixir side.
+#[rustler::nif]
+fn insert_metrics_tagged(resolved: (&Storage, usize), tag_results: Term, batch: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let registered = storage
+        .registered
+        .get()
+        .expect("register_metrics must be called before insert_metrics");
+
+    // Borrowed straight from the term, no `Vec` - see `insert_metrics_flat`.
+    let env = tag_results.get_env();
+    let tag_terms =
+        match unsafe { rustler::wrapper::tuple::get_tuple(env.as_c_arg(), tag_results.as_c_arg()) } {
+            Ok(terms) => terms,
+            Err(_) => panic!("tag_results must be a tuple"),
+        };
+
+    // Lazily-filled hash cache, one slot per distinct tags map. `u64::MAX`
+    // is the "not yet computed" sentinel; a real hash colliding with it just
+    // means recomputing, which is harmless. Kept small and stack-allocated -
+    // an event with more than 8 *distinct* tags configurations falls back to
+    // hashing per sample rather than paying to zero a larger array on every
+    // event.
+    let mut hashes = [u64::MAX; 8];
+
+    for item in batch.into_list_iterator().expect("batch must be a list") {
+        let (id, value, tag_idx): (usize, Term, usize) =
+            item.decode().expect("batch items must be {id, value, tag_idx} tuples");
+
+        let tags = unsafe { Term::new(env, tag_terms[tag_idx]) };
+
+        let hash = if tag_idx < hashes.len() {
+            if hashes[tag_idx] == u64::MAX {
+                hashes[tag_idx] = tags.hash_internal(0) as u64;
+            }
+            hashes[tag_idx]
+        } else {
+            tags.hash_internal(0) as u64
+        };
+
+        store_one(registered, shard_id, id, value, tags, hash);
+    }
+
+    rustler::types::atom::ok()
+}
+
+// Prices the synchronization on the Counter hot path: same hash, same
+// hashbrown probe, same `tags_match`, but with the per-shard `RwLock`
+// removed - and, in the `plain` variant, the atomic RMW replaced by an
+// ordinary `+= 1`. This is the ceiling on what "one Storage per scheduler
+// thread, no locks, no atomics" could buy.
+
+#[rustler::nif]
+fn insert_counter_unlocked_atomic(resolved: (&Storage, usize), id: usize, tags: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let slots = storage.unsync.get().expect("register_metrics must be called first");
+    let cell = &slots.unlocked_atomic[id][shard_id].0;
+    let hash = tags.hash_internal(0) as u64;
+
+    // SAFETY: measurement scaffolding, single-threaded by construction.
+    let map = unsafe { &*cell.get() };
+    if let Some((_, counter)) = map.raw_entry().from_hash(hash, |key| tags_match(tags, key)) {
+        counter.fetch_add(1, Ordering::Relaxed);
+        return rustler::types::atom::ok();
+    }
+
+    let map = unsafe { &mut *cell.get() };
+    let (_, counter) = map
+        .raw_entry_mut()
+        .from_hash(hash, |key| tags_match(tags, key))
+        .or_insert_with(|| (build_tags_key(tags, hash), AtomicI64::new(0)));
+    counter.fetch_add(1, Ordering::Relaxed);
+
+    rustler::types::atom::ok()
+}
+
+#[rustler::nif]
+fn insert_counter_unlocked_plain(resolved: (&Storage, usize), id: usize, tags: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let slots = storage.unsync.get().expect("register_metrics must be called first");
+    let cell = &slots.unlocked_plain[id][shard_id].0;
+    let hash = tags.hash_internal(0) as u64;
+
+    // SAFETY: measurement scaffolding, single-threaded by construction.
+    let map = unsafe { &mut *cell.get() };
+    match map.raw_entry_mut().from_hash(hash, |key| tags_match(tags, key)) {
+        RawEntryMut::Occupied(mut entry) => *entry.get_mut() += 1,
+        RawEntryMut::Vacant(entry) => {
+            entry.insert(build_tags_key(tags, hash), 1);
+        }
+    }
+
+    rustler::types::atom::ok()
+}
+
+/// The same three variants, batched, so the synchronization cost can also be
+/// read against the (much lower) per-metric cost of the batched path.
+#[rustler::nif]
+fn insert_counters_unlocked_plain(resolved: (&Storage, usize), batch: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let slots = storage.unsync.get().expect("register_metrics must be called first");
+
+    for item in batch.into_list_iterator().expect("batch must be a list") {
+        let (id, _value, tags): (usize, Term, Term) = item.decode().expect("batch item");
+        let cell = &slots.unlocked_plain[id][shard_id].0;
+        let hash = tags.hash_internal(0) as u64;
+
+        // SAFETY: measurement scaffolding, single-threaded by construction.
+        let map = unsafe { &mut *cell.get() };
+        match map.raw_entry_mut().from_hash(hash, |key| tags_match(tags, key)) {
+            RawEntryMut::Occupied(mut entry) => *entry.get_mut() += 1,
+            RawEntryMut::Vacant(entry) => {
+                entry.insert(build_tags_key(tags, hash), 1);
+            }
+        }
+    }
+
+    rustler::types::atom::ok()
+}
+
+/// Batched, no `RwLock`, values still `AtomicI64` - the middle term that
+/// separates the lock's contended cost from the atomic's.
+#[rustler::nif]
+fn insert_counters_unlocked_atomic(resolved: (&Storage, usize), batch: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let slots = storage.unsync.get().expect("register_metrics must be called first");
+
+    for item in batch.into_list_iterator().expect("batch must be a list") {
+        let (id, _value, tags): (usize, Term, Term) = item.decode().expect("batch item");
+        let cell = &slots.unlocked_atomic[id][shard_id];
+        let hash = tags.hash_internal(0) as u64;
+
+        // SAFETY: measurement scaffolding, see `UnsyncSlots`.
+        let map = unsafe { &*cell.get() };
+        if let Some((_, counter)) = map.raw_entry().from_hash(hash, |key| tags_match(tags, key)) {
+            counter.fetch_add(1, Ordering::Relaxed);
+            continue;
+        }
+
+        let map = unsafe { &mut *cell.get() };
+        let (_, counter) = map
+            .raw_entry_mut()
+            .from_hash(hash, |key| tags_match(tags, key))
+            .or_insert_with(|| (build_tags_key(tags, hash), AtomicI64::new(0)));
+        counter.fetch_add(1, Ordering::Relaxed);
+    }
+
+    rustler::types::atom::ok()
+}
+
+/// Byte-for-byte `insert_counters_unlocked_atomic`, plus a read guard on a
+/// lock that protects nothing. Differencing the two isolates the cost of
+/// `RwLock::read` + guard drop from every other difference between the real
+/// and shadow paths.
+#[rustler::nif]
+fn insert_counters_dummy_locked(resolved: (&Storage, usize), batch: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let slots = storage.unsync.get().expect("register_metrics must be called first");
+
+    for item in batch.into_list_iterator().expect("batch must be a list") {
+        let (id, _value, tags): (usize, Term, Term) = item.decode().expect("batch item");
+        let _guard = slots.dummy_locks[id][shard_id].read().unwrap();
+
+        let cell = &slots.unlocked_atomic[id][shard_id];
+        let hash = tags.hash_internal(0) as u64;
+
+        // SAFETY: measurement scaffolding, see `UnsyncSlots`.
+        let map = unsafe { &*cell.get() };
+        if let Some((_, counter)) = map.raw_entry().from_hash(hash, |key| tags_match(tags, key)) {
+            counter.fetch_add(1, Ordering::Relaxed);
+            continue;
+        }
+
+        let map = unsafe { &mut *cell.get() };
+        let (_, counter) = map
+            .raw_entry_mut()
+            .from_hash(hash, |key| tags_match(tags, key))
+            .or_insert_with(|| (build_tags_key(tags, hash), AtomicI64::new(0)));
+        counter.fetch_add(1, Ordering::Relaxed);
+    }
+
+    rustler::types::atom::ok()
+}
+
+/// `insert_counters_dummy_locked` with `parking_lot::RwLock` in place of
+/// std's.
+#[rustler::nif]
+fn insert_counters_pl_locked(resolved: (&Storage, usize), batch: Term) -> Atom {
+    let (storage, shard_id) = resolved;
+    let slots = storage.unsync.get().expect("register_metrics must be called first");
+
+    for item in batch.into_list_iterator().expect("batch must be a list") {
+        let (id, _value, tags): (usize, Term, Term) = item.decode().expect("batch item");
+        let _guard = slots.dummy_pl_locks[id][shard_id].read();
+
+        let cell = &slots.unlocked_atomic[id][shard_id];
+        let hash = tags.hash_internal(0) as u64;
+
+        // SAFETY: measurement scaffolding, see `UnsyncSlots`.
+        let map = unsafe { &*cell.get() };
+        if let Some((_, counter)) = map.raw_entry().from_hash(hash, |key| tags_match(tags, key)) {
+            counter.fetch_add(1, Ordering::Relaxed);
+            continue;
+        }
+
+        let map = unsafe { &mut *cell.get() };
+        let (_, counter) = map
+            .raw_entry_mut()
+            .from_hash(hash, |key| tags_match(tags, key))
+            .or_insert_with(|| (build_tags_key(tags, hash), AtomicI64::new(0)));
+        counter.fetch_add(1, Ordering::Relaxed);
+    }
+
+    rustler::types::atom::ok()
+}
+
+/// A Counter insert whose shard comes from a Rust `thread_local!` rather than
+/// from Elixir's `resolve/1`, so `insert_metric`'s first argument can be a
+/// bare resource instead of a `{resource, shard_id}` tuple. Prices both the
+/// thread-local read and the tuple decode it replaces.
+#[rustler::nif]
+fn insert_counter_thread_local(storage: &Storage, id: usize, tags: Term) -> Atom {
+    let registered = storage.registered.get().expect("register_metrics must be called first");
+    let shard_id = thread_shard(scheduler_count());
+
+    if let Some(MetricSlot::Counter(counters)) = registered.metrics.get(id) {
+        counters.increment(shard_id, tags, tags.hash_internal(0) as u64, 1);
+    }
+
+    rustler::types::atom::ok()
+}
+
+/// Just the thread-local read, to separate it from the insert work above.
+#[rustler::nif]
+fn debug_thread_local(_storage: &Storage) -> Atom {
+    std::hint::black_box(thread_shard(64));
+    rustler::types::atom::ok()
+}
+
+/// Reports the calling OS thread's own shard index, plus what
+/// `enif_thread_type` says this thread is. Used to check the linchpin of a
+/// truly lock-free design: that a process pinned to scheduler K via
+/// `spawn_opt(scheduler: K)` always lands on the same OS thread, so a
+/// scheduler-pinned collector can read that thread's storage with no
+/// synchronization at all.
+#[rustler::nif]
+fn debug_thread_shard() -> (usize, i32) {
+    (
+        thread_shard(1024),
+        unsafe { rustler::sys::enif_thread_type() },
+    )
 }
 
 // Temporary diagnostics, not part of `Peep.Storage`: peel back each layer

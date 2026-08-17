@@ -9,4 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 hashbrown = "0.17.1"
+# Under evaluation: std's RwLock read-acquire is unexpectedly expensive on
+# macOS under multicore load. See scripts/lock_parallel_bench.exs.
+parking_lot = "0.12"
 rustler = "0.38.0"
