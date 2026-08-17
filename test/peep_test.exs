@@ -157,6 +157,29 @@ defmodule PeepTest do
     assert Peep.Persistent.fetch(name) == nil
   end
 
+  test "tag keys absent from metadata are omitted" do
+    name = :"#{__MODULE__}_missing_tag_keys"
+
+    one = Metrics.counter("#{name}.one", event_name: [name, :one], tags: [:a])
+    two = Metrics.counter("#{name}.two", event_name: [name, :two], tags: [:a, :b])
+
+    {:ok, _pid} = Peep.start_link(name: name, metrics: [one, two])
+
+    :telemetry.execute([name, :one], %{}, %{a: 1})
+    :telemetry.execute([name, :one], %{}, %{b: 2})
+
+    :telemetry.execute([name, :two], %{}, %{a: 1, b: 2})
+    :telemetry.execute([name, :two], %{}, %{a: 1})
+
+    all = Peep.get_all_metrics(name)
+
+    assert Peep.Test.get_metric(all, one, %{a: 1}) == 1
+    assert Peep.Test.get_metric(all, one, %{}) == 1
+
+    assert Peep.Test.get_metric(all, two, %{a: 1, b: 2}) == 1
+    assert Peep.Test.get_metric(all, two, %{a: 1}) == 1
+  end
+
   test "Non-numeric values are dropped" do
     name = :"#{__MODULE__}_non_numeric_values"
 
