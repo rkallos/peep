@@ -98,6 +98,7 @@ defmodule Peep.Persistent do
     indexed =
       metrics
       |> Enum.filter(&Peep.allow_metric?/1)
+      |> Enum.uniq()
       |> Enum.with_index()
 
     events_to_metrics =
