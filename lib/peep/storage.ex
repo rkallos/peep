@@ -66,12 +66,26 @@ defmodule Peep.Storage do
   @callback prune_tags(term(), [%{Metrics.tag() => term()}]) :: :ok
 
   @doc """
+  Called once when Peep starts, so a backend can get what it needs to know
+  about Peep's metrics up front instead of calling into Peep while handling
+  telemetry events.
+
+  Each distribution carries `:peep_buckets`: `{upper_bound, label}` pairs sorted
+  by bound, with no repeated bound or label. Bounds are exclusive floats; a
+  sample at or above the last one belongs in the `:infinity` bucket.
+  """
+  @callback register_metrics(
+              storage :: term(),
+              ids_to_metrics :: Peep.Persistent.ids_to_metrics()
+            ) :: :ok
+
+  @doc """
   Resolves storage to its per-scheduler form for the current scheduler.
   Called once per event to avoid redundant scheduler lookups across metrics.
   """
   @callback resolve(term()) :: term()
 
-  @optional_callbacks insert_metric: 5, insert_metrics: 3
+  @optional_callbacks insert_metric: 5, insert_metrics: 3, register_metrics: 2
 
   @doc false
   @spec insert_shape(module()) :: :batched | :per_metric
@@ -91,5 +105,11 @@ defmodule Peep.Storage do
               "storage module #{inspect(storage_mod)} exports neither " <>
                 "insert_metric/5 nor insert_metrics/3"
     end
+  end
+
+  @doc false
+  @spec registers_metrics?(module()) :: boolean()
+  def registers_metrics?(storage_mod) do
+    Code.ensure_loaded?(storage_mod) and function_exported?(storage_mod, :register_metrics, 2)
   end
 end
