@@ -64,9 +64,13 @@ defmodule Peep.Persistent do
   end
 
   @spec store(t()) :: :ok
-  def store(persistent() = term) do
-    persistent(name: name) = term
+  def store(persistent(name: name, storage: {mod, state}, ids_to_metrics: i2m) = term) do
+    if Peep.Storage.registers_metrics?(mod) do
+      mod.register_metrics(state, with_buckets(i2m))
+    end
+
     :persistent_term.put(key(name), term)
+    :ok
   end
 
   @spec fetch(name()) :: t() | nil
@@ -110,6 +114,29 @@ defmodule Peep.Persistent do
       |> List.to_tuple()
 
     {events_to_metrics, ids_to_metrics}
+  end
+
+  defp with_buckets(ids_to_metrics) do
+    ids_to_metrics
+    |> Tuple.to_list()
+    |> Enum.map(fn
+      %Telemetry.Metrics.Distribution{} = d -> Map.put(d, :peep_buckets, buckets(d))
+      metric -> metric
+    end)
+    |> List.to_tuple()
+  end
+
+  # Of buckets sharing a label, the one with the highest bound is kept.
+  defp buckets(distribution) do
+    {mod, config} = Peep.Buckets.config(distribution)
+
+    mod.boundaries(config)
+    |> Enum.with_index(fn bound, idx -> {bound * 1.0, mod.upper_bound(idx, config)} end)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.dedup_by(&elem(&1, 0))
+    |> Enum.reverse()
+    |> Enum.uniq_by(&elem(&1, 1))
+    |> Enum.reverse()
   end
 
   defp key(name) when is_atom(name) do
