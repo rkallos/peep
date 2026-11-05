@@ -1,5 +1,5 @@
 defmodule StatsdCacheTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias Peep.Statsd.Cache
   alias Telemetry.Metrics

@@ -1,5 +1,5 @@
 defmodule PlugTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   import Plug.Test
   import Telemetry.Metrics
@@ -87,7 +87,7 @@ defmodule PlugTest do
       plug = {Peep.Plug, peep_worker: name}
       port = 9001
 
-      {:ok, _pid} = start_supervised({Bandit, plug: plug, port: port})
+      {:ok, _pid} = start_supervised({Bandit, plug: plug, port: port, startup_log: false})
 
       assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _, _}} =
                :httpc.request("http://localhost:#{port}/metrics")

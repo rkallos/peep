@@ -1,5 +1,5 @@
 defmodule PeepTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   import ExUnit.CaptureLog
 
   doctest Peep
@@ -44,15 +44,19 @@ defmodule PeepTest do
     tags = %{foo: "bar", baz: "quux", service: "my-app", env: "production"}
     tag_keys = [:foo, :baz]
 
-    counter = Metrics.counter("peep.counter", event_name: [:counter], tags: tag_keys)
-    sum = Metrics.sum("peep.sum", event_name: [:sum], measurement: :count, tags: tag_keys)
+    counter = Metrics.counter("peep.counter", event_name: [name, :counter], tags: tag_keys)
+    sum = Metrics.sum("peep.sum", event_name: [name, :sum], measurement: :count, tags: tag_keys)
 
     last_value =
-      Metrics.last_value("peep.gauge", event_name: [:gauge], measurement: :value, tags: tag_keys)
+      Metrics.last_value("peep.gauge",
+        event_name: [name, :gauge],
+        measurement: :value,
+        tags: tag_keys
+      )
 
     distribution =
       Metrics.distribution("peep.dist",
-        event_name: [:dist],
+        event_name: [name, :dist],
         measurement: :value,
         tags: tag_keys,
         reporter_options: [max_value: 100]
@@ -67,10 +71,10 @@ defmodule PeepTest do
     ]
 
     assert {:ok, _pid} = Peep.start_link(options)
-    :telemetry.execute([:counter], %{})
-    :telemetry.execute([:sum], %{count: 5})
-    :telemetry.execute([:gauge], %{value: 10})
-    :telemetry.execute([:dist], %{value: 15})
+    :telemetry.execute([name, :counter], %{})
+    :telemetry.execute([name, :sum], %{count: 5})
+    :telemetry.execute([name, :gauge], %{value: 10})
+    :telemetry.execute([name, :dist], %{value: 15})
 
     all = Peep.get_all_metrics(name)
     assert Peep.Test.get_metric(all, counter, tags) == 1
@@ -85,15 +89,15 @@ defmodule PeepTest do
     options = [
       name: name,
       metrics: [
-        Metrics.counter("another.peep.counter", event_name: [:another, :counter]),
-        Metrics.sum("another.peep.sum", event_name: [:another, :sum], measurement: :count)
+        Metrics.counter("another.peep.counter", event_name: [name, :counter]),
+        Metrics.sum("another.peep.sum", event_name: [name, :sum], measurement: :count)
       ]
     ]
 
     {:ok, _pid} = Peep.start_link(options)
 
-    :telemetry.execute([:another, :counter], %{})
-    :telemetry.execute([:another, :sum], %{count: 10})
+    :telemetry.execute([name, :counter], %{})
+    :telemetry.execute([name, :sum], %{count: 10})
     assert %{} = Peep.get_all_metrics(name)
   end
 
@@ -121,7 +125,7 @@ defmodule PeepTest do
   end
 
   test "Handlers are detached on shutdown" do
-    prefix = [:peep, :shutdown_test]
+    prefix = [:"#{__MODULE__}_shutdown_test"]
 
     metric =
       Metrics.counter(prefix ++ [:counter])
