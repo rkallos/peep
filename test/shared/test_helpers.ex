@@ -56,17 +56,25 @@ defmodule Peep.Test do
     name
   end
 
-  def get_metric(all_metrics, metric, tags) do
-    tags = to_map(tags)
-    tags_map = Map.get(all_metrics, metric, %{})
+  @doc """
+  The scraped series of `dist` after it records `values`: every bucket its
+  calculator defines, labelled by `c:Peep.Buckets.upper_bound/2`, plus
+  `:infinity` and `:sum`.
+  """
+  def distribution_series(%Metrics.Distribution{} = dist, values) do
+    {mod, config} = Peep.Buckets.config(dist)
+    n = mod.number_of_buckets(config)
 
-    case metric do
-      %Metrics.Counter{} -> Map.get(tags_map, tags, 0)
-      %Metrics.Sum{} -> Map.get(tags_map, tags, 0)
-      _other -> Map.get(tags_map, tags)
-    end
+    empty =
+      0..(n - 1)//1
+      |> Map.new(&{mod.upper_bound(&1, config), 0})
+      |> Map.merge(%{infinity: 0, sum: 0})
+
+    Enum.reduce(values, empty, fn value, series ->
+      idx = mod.bucket_for(value, config)
+      label = if idx < n, do: mod.upper_bound(idx, config), else: :infinity
+
+      %{series | label => series[label] + 1, sum: series.sum + round(value)}
+    end)
   end
-
-  defp to_map(tags) when is_map(tags), do: tags
-  defp to_map(tags) when is_list(tags), do: Map.new(tags)
 end

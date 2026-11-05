@@ -38,9 +38,7 @@ defmodule Peep.Storage.Test do
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      all = Peep.get_all_metrics(name)
-      assert Peep.Test.get_metric(all, counter, %{}) == 1000
-      assert Peep.Test.get_metric(all, counter, %{even: true}) == 500
+      assert Peep.get_all_metrics(name) == %{counter => %{%{} => 1000, %{even: true} => 500}}
     end
 
     test "#{inspect(impl)} - a sum can be stored and retrieved" do
@@ -60,9 +58,7 @@ defmodule Peep.Storage.Test do
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      all = Peep.get_all_metrics(name)
-      assert Peep.Test.get_metric(all, sum, []) == 100 * 20
-      assert Peep.Test.get_metric(all, sum, even: true) == 100 * 15
+      assert Peep.get_all_metrics(name) == %{sum => %{%{} => 100 * 20, %{even: true} => 100 * 15}}
     end
 
     test "#{inspect(impl)} - a last_value can be stored and retrieved" do
@@ -82,9 +78,7 @@ defmodule Peep.Storage.Test do
 
       1..100 |> Enum.map(fn _ -> Task.async(f) end) |> Task.await_many()
 
-      all = Peep.get_all_metrics(name)
-      assert Peep.Test.get_metric(all, last_value, []) == 10
-      assert Peep.Test.get_metric(all, last_value, odd: true) == 9
+      assert Peep.get_all_metrics(name) == %{last_value => %{%{} => 10, %{odd: true} => 9}}
     end
 
     test "#{inspect(impl)} - binary tag values round-trip byte-for-byte" do
@@ -105,19 +99,12 @@ defmodule Peep.Storage.Test do
         Peep.Test.insert_metric(name, last_value, 7, %{t: tag_value})
       end
 
-      all = Peep.get_all_metrics(name)
-
-      for metric <- [counter, last_value] do
-        # Asserting on the keys themselves, not only on lookups by them, so a
-        # backend that mangled the bytes can't pass by mangling both sides.
-        assert all |> Map.fetch!(metric) |> Map.keys() |> Enum.sort() ==
-                 Enum.sort([%{t: utf8}, %{t: not_utf8}])
-      end
-
-      for tag_value <- [utf8, not_utf8] do
-        assert Peep.Test.get_metric(all, counter, %{t: tag_value}) == 1
-        assert Peep.Test.get_metric(all, last_value, %{t: tag_value}) == 7
-      end
+      # Comparing whole maps compares the keys themselves, so a backend that
+      # mangled the bytes can't pass by mangling both sides of a lookup.
+      assert Peep.get_all_metrics(name) == %{
+               counter => %{%{t: utf8} => 1, %{t: not_utf8} => 1},
+               last_value => %{%{t: utf8} => 7, %{t: not_utf8} => 7}
+             }
     end
 
     test "#{inspect(impl)} - a distribution can be stored and retrieved" do
@@ -175,8 +162,7 @@ defmodule Peep.Storage.Test do
         :sum => 100 * 2_001_000
       }
 
-      all = Peep.get_all_metrics(name)
-      assert Peep.Test.get_metric(all, dist, []) == expected
+      assert Peep.get_all_metrics(name) == %{dist => %{%{} => expected}}
     end
 
     test "#{inspect(impl)} - distribution bucket variability" do
@@ -218,8 +204,7 @@ defmodule Peep.Storage.Test do
         :sum => 500_500 * 100
       }
 
-      all = Peep.get_all_metrics(name)
-      assert Peep.Test.get_metric(all, dist, []) == expected
+      assert Peep.get_all_metrics(name) == %{dist => %{%{} => expected}}
     end
 
     test "#{inspect(impl)} - default distribution handles negative values" do
@@ -260,8 +245,7 @@ defmodule Peep.Storage.Test do
         :sum => 0
       }
 
-      all = Peep.get_all_metrics(name)
-      assert Peep.Test.get_metric(all, dist, []) == expected
+      assert Peep.get_all_metrics(name) == %{dist => %{%{} => expected}}
     end
 
     test "#{inspect(impl)} - storage_size/1" do
@@ -292,38 +276,60 @@ defmodule Peep.Storage.Test do
       end
     end
 
-    test "#{inspect(impl)} - prune tags" do
-      counter = Metrics.counter("storage.test.counter")
-      sum = Metrics.sum("storage.test.sum")
-      last_value = Metrics.last_value("storage.test.gauge")
-
-      dist =
-        Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
-
-      metrics = [counter, sum, last_value, dist]
-
+    test "#{inspect(impl)} - pruning every inserted tags map empties storage" do
+      metrics = prune_metrics()
       name = Peep.Test.start_peep!(storage: unquote(impl), metrics: metrics)
+      populate(name, metrics)
 
-      populate = fn ->
-        for metric <- metrics do
-          Peep.Test.insert_metric(name, metric, 5, %{foo: :bar})
-          Peep.Test.insert_metric(name, metric, 5, %{baz: :quux})
-        end
-
-        assert Peep.get_all_metrics(name) != %{}
-      end
-
-      populate.()
       assert Peep.prune_tags(name, [%{foo: :bar}, %{baz: :quux}]) == :ok
       assert Peep.get_all_metrics(name) == %{}
-
-      populate.()
-      assert Peep.prune_tags(name, [%{foo: :bar, baz: :quux}]) == :ok
-      assert Peep.get_all_metrics(name) != %{}
-
-      populate.()
-      assert Peep.prune_tags(name, [%{foo: :blah}, %{foo: :bar}, %{baz: :quux}]) == :ok
-      assert Peep.get_all_metrics(name) == %{}
     end
+
+    test "#{inspect(impl)} - a pattern matching no tags map prunes nothing" do
+      metrics = prune_metrics()
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: metrics)
+      populate(name, metrics)
+
+      assert Peep.prune_tags(name, [%{foo: :bar, baz: :quux}]) == :ok
+      assert Peep.get_all_metrics(name) == populated(metrics, [%{foo: :bar}, %{baz: :quux}])
+    end
+
+    test "#{inspect(impl)} - patterns matching nothing don't stop the others" do
+      metrics = prune_metrics()
+      name = Peep.Test.start_peep!(storage: unquote(impl), metrics: metrics)
+      populate(name, metrics)
+
+      assert Peep.prune_tags(name, [%{foo: :blah}, %{foo: :bar}]) == :ok
+      assert Peep.get_all_metrics(name) == populated(metrics, [%{baz: :quux}])
+    end
+  end
+
+  defp prune_metrics do
+    [
+      Metrics.counter("storage.test.counter"),
+      Metrics.sum("storage.test.sum"),
+      Metrics.last_value("storage.test.gauge"),
+      Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+    ]
+  end
+
+  defp populate(name, metrics) do
+    for metric <- metrics, tags <- [%{foo: :bar}, %{baz: :quux}] do
+      Peep.Test.insert_metric(name, metric, 5, tags)
+    end
+  end
+
+  # The scrape after `populate/2`, keeping only the series under `tags`.
+  defp populated(metrics, tags) do
+    Map.new(metrics, fn metric ->
+      value =
+        case metric do
+          %Metrics.Counter{} -> 1
+          %Metrics.Distribution{} -> Peep.Test.distribution_series(metric, [5])
+          _sum_or_last_value -> 5
+        end
+
+      {metric, Map.new(tags, &{&1, value})}
+    end)
   end
 end

@@ -76,29 +76,26 @@ defmodule PeepTest do
     :telemetry.execute([name, :gauge], %{value: 10})
     :telemetry.execute([name, :dist], %{value: 15})
 
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, counter, tags) == 1
-    assert Peep.Test.get_metric(all, sum, tags) == 5
-    assert Peep.Test.get_metric(all, last_value, tags) == 10
-    assert Peep.Test.get_metric(all, distribution, tags).sum == 15
+    assert Peep.get_all_metrics(name) == %{
+             counter => %{tags => 1},
+             sum => %{tags => 5},
+             last_value => %{tags => 10},
+             distribution => %{tags => Peep.Test.distribution_series(distribution, [15])}
+           }
   end
 
   test "Peep process name can be used with Peep.Storage" do
     name = :"#{__MODULE__}_storage"
 
-    options = [
-      name: name,
-      metrics: [
-        Metrics.counter("another.peep.counter", event_name: [name, :counter]),
-        Metrics.sum("another.peep.sum", event_name: [name, :sum], measurement: :count)
-      ]
-    ]
+    counter = Metrics.counter("another.peep.counter", event_name: [name, :counter])
+    sum = Metrics.sum("another.peep.sum", event_name: [name, :sum], measurement: :count)
 
-    {:ok, _pid} = Peep.start_link(options)
+    {:ok, _pid} = Peep.start_link(name: name, metrics: [counter, sum])
 
     :telemetry.execute([name, :counter], %{})
     :telemetry.execute([name, :sum], %{count: 10})
-    assert %{} = Peep.get_all_metrics(name)
+
+    assert Peep.get_all_metrics(name) == %{counter => %{%{} => 1}, sum => %{%{} => 10}}
   end
 
   test "Summary metrics are dropped" do
@@ -172,11 +169,12 @@ defmodule PeepTest do
     :telemetry.execute([name, :event], %{value: 10}, %{kept: true})
     :telemetry.execute([name, :event], %{value: 99}, %{kept: false})
 
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, counter, %{}) == 1
-    assert Peep.Test.get_metric(all, sum, %{}) == 10
-    assert Peep.Test.get_metric(all, gauge, %{}) == 10
-    assert Peep.Test.get_metric(all, unfiltered, %{}) == 2
+    assert Peep.get_all_metrics(name) == %{
+             counter => %{%{} => 1},
+             sum => %{%{} => 10},
+             gauge => %{%{} => 10},
+             unfiltered => %{%{} => 2}
+           }
   end
 
   test "a 2-arity keep is passed the event's measurements" do
@@ -188,7 +186,7 @@ defmodule PeepTest do
       measurements[:value] == 10
     end
 
-    metrics = [counter | _] = keep_metrics(name, keep)
+    metrics = [counter, sum, gauge, unfiltered] = keep_metrics(name, keep)
 
     {:ok, _pid} = Peep.start_link(name: name, metrics: metrics)
 
@@ -198,8 +196,12 @@ defmodule PeepTest do
     assert_received {:keep, %{kept: true}, %{value: 10}}
     assert_received {:keep, %{kept: true}, %{value: 99}}
 
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, counter, %{}) == 1
+    assert Peep.get_all_metrics(name) == %{
+             counter => %{%{} => 1},
+             sum => %{%{} => 10},
+             gauge => %{%{} => 10},
+             unfiltered => %{%{} => 2}
+           }
   end
 
   test "tag keys absent from metadata are omitted" do
@@ -216,13 +218,10 @@ defmodule PeepTest do
     :telemetry.execute([name, :two], %{}, %{a: 1, b: 2})
     :telemetry.execute([name, :two], %{}, %{a: 1})
 
-    all = Peep.get_all_metrics(name)
-
-    assert Peep.Test.get_metric(all, one, %{a: 1}) == 1
-    assert Peep.Test.get_metric(all, one, %{}) == 1
-
-    assert Peep.Test.get_metric(all, two, %{a: 1, b: 2}) == 1
-    assert Peep.Test.get_metric(all, two, %{a: 1}) == 1
+    assert Peep.get_all_metrics(name) == %{
+             one => %{%{a: 1} => 1, %{} => 1},
+             two => %{%{a: 1, b: 2} => 1, %{a: 1} => 1}
+           }
   end
 
   test "Non-numeric values are dropped" do
@@ -256,10 +255,7 @@ defmodule PeepTest do
     :telemetry.execute([name, :last_value], %{value: "bar"})
     :telemetry.execute([name, :dist], %{value: []})
 
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, sum, []) == 0
-    assert Peep.Test.get_metric(all, last_value, []) == nil
-    assert Peep.Test.get_metric(all, dist, []) == nil
+    assert Peep.get_all_metrics(name) == %{}
   end
 
   # A counter, sum and last_value sharing one event and one keep filter, plus an
