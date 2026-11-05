@@ -1,5 +1,5 @@
 defmodule StatsdTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias Peep.Statsd
   alias Telemetry.Metrics

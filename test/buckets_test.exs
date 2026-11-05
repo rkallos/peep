@@ -1,5 +1,5 @@
 defmodule BucketsTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   defmodule CustomBuckets do
     use Peep.Buckets.Custom, buckets: [3.14, 3.5, 4, 8, 15, 16, 23, 42, 50.5, 60]
