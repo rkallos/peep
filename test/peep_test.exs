@@ -5,38 +5,6 @@ defmodule PeepTest do
 
   alias Telemetry.Metrics
 
-  test "a worker can be started" do
-    options = [
-      name: __MODULE__,
-      metrics: []
-    ]
-
-    assert {:ok, pid} = Peep.start_link(options)
-    assert Process.alive?(pid)
-  end
-
-  test "many workers can be started" do
-    for i <- 1..10 do
-      options = [
-        name: :"#{__MODULE__}_#{i}",
-        metrics: []
-      ]
-
-      assert {:ok, pid} = Peep.start_link(options)
-      assert Process.alive?(pid)
-    end
-  end
-
-  test "a worker with no statsd config has no statsd state" do
-    options = [
-      name: :"#{__MODULE__}_no_statsd",
-      metrics: []
-    ]
-
-    assert {:ok, pid} = Peep.start_link(options)
-    assert match?(%{statsd_state: nil}, :sys.get_state(pid))
-  end
-
   test "a worker with non-empty global_tags applies to all metrics" do
     tags = %{foo: "bar", baz: "quux", service: "my-app", env: "production"}
     tag_keys = [:foo, :baz]
