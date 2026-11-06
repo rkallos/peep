@@ -76,7 +76,6 @@ defmodule Peep.Handler.Config do
   defp tag_fn_key(metric), do: {metric.tag_values, metric.tags}
 
   defp compile_tag_fn(_tag_values, []), do: fn _metadata -> %{} end
-  defp compile_tag_fn(_tag_values, tags) when is_function(tags, 1), do: tags
 
   defp compile_tag_fn(tag_values, [k1]) do
     fn metadata ->

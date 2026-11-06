@@ -181,7 +181,6 @@ defmodule Peep.EventHandler do
     do: keep.(metadata, measurement)
 
   defp keep?(keep, metadata, _measurement) when is_function(keep, 1), do: keep.(metadata)
-  defp keep?(_keep, _metadata, _measurement), do: true
 
   defp fetch_measurement(measurement, measurements, metadata) do
     case measurement do
