@@ -138,7 +138,7 @@ defmodule Peep.Statsd do
           default_socket_opts
       end
 
-    case :gen_udp.open(0, opts) do
+    case Peep.UDP.open(0, opts) do
       {:ok, sock} ->
         %__MODULE__{state | socket: sock}
 
