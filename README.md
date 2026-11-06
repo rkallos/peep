@@ -76,3 +76,32 @@ end
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/peep>.
+
+## Tests
+
+```sh
+mix test
+```
+
+`test/shared/storage_test.exs` is a suite that any `Peep.Storage`
+implementation can run; its module doc shows how.
+
+### Guidelines
+
+- **A `check` per suite**: each suite has a `check` helper that runs the code
+  under test once. It takes the inputs first, then the expectations prefixed
+  with `exp_`, e.g. `exp_scrape:` or `exp_export:`.
+- **Assert whole values**: outputs are compared whole with `==`, so that an
+  unexpected metric, series or line fails the test. Most tests compare a
+  scrape, the map returned by `Peep.get_all_metrics/1`.
+- **Test a module directly**: the exporters are tested on scrapes, without
+  starting a reporter. `PeepTest` covers the path from a `:telemetry` event to
+  the scrape.
+- **Async suites**: every suite is `async: true`. Tests that emit `:telemetry`
+  events use event names unique to the test, so that no other reporter
+  receives them.
+- **Silent tests**: a passing run prints nothing. A test whose code is
+  expected to log is tagged `@tag capture_log: true`, and checks what the code
+  did rather than what it logged.
+- **Tests must be able to fail**: check that a new test fails without the
+  change it covers.
