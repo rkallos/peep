@@ -237,6 +237,45 @@ defmodule PrometheusTest do
     end
   end
 
+  test "metric names keep only the characters Prometheus allows" do
+    counter = Metrics.counter("1st.my-counter", description: "a counter")
+
+    check(
+      scrape: %{counter => %{%{} => 1}},
+      exp_export: [
+        "# HELP st_mycounter a counter",
+        "# TYPE st_mycounter counter",
+        "st_mycounter 1"
+      ]
+    )
+  end
+
+  test "a nil label value is exported as nil" do
+    counter = Metrics.counter("prometheus.test.counter", description: "a counter")
+
+    check(
+      scrape: %{counter => %{%{foo: nil} => 1}},
+      exp_export: [
+        "# HELP prometheus_test_counter a counter",
+        "# TYPE prometheus_test_counter counter",
+        ~s(prometheus_test_counter{foo="nil"} 1)
+      ]
+    )
+  end
+
+  test "backslashes and newlines are escaped in labels and help" do
+    counter = Metrics.counter("prometheus.test.counter", description: "a \\ b\nc")
+
+    check(
+      scrape: %{counter => %{%{path: "a\\b"} => 1}},
+      exp_export: [
+        "# HELP prometheus_test_counter a \\\\ b\\nc",
+        "# TYPE prometheus_test_counter counter",
+        ~S(prometheus_test_counter{path="a\\b"} 1)
+      ]
+    )
+  end
+
   test "regression: label escaping" do
     counter = Metrics.counter("prometheus.test.counter", description: "a counter")
 
