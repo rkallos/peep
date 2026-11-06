@@ -259,6 +259,18 @@ defmodule PeepTest do
     )
   end
 
+  test "a storage module that can't be loaded is rejected" do
+    assert_raise ArgumentError, "storage module NotAModule could not be loaded", fn ->
+      Peep.Storage.insert_shape(NotAModule)
+    end
+  end
+
+  test "a storage module exporting neither insert callback is rejected" do
+    assert_raise ArgumentError,
+                 "storage module PeepTest exports neither insert_metric/5 nor insert_metrics/3",
+                 fn -> Peep.Storage.insert_shape(PeepTest) end
+  end
+
   defp check(opts) do
     name =
       Peep.Test.start_peep!(
