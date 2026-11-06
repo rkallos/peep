@@ -84,6 +84,17 @@ defmodule PeepTest do
            }
   end
 
+  test "event metadata overrides a global tag" do
+    name = :"#{__MODULE__}_global_tags_override"
+    counter = Metrics.counter("peep.counter", event_name: [name, :counter], tags: [:foo, :baz])
+
+    {:ok, _pid} = Peep.start_link(name: name, metrics: [counter], global_tags: %{foo: :bar})
+
+    :telemetry.execute([name, :counter], %{}, %{foo: 2137, baz: "quux"})
+
+    assert Peep.get_all_metrics(name) == %{counter => %{%{foo: 2137, baz: "quux"} => 1}}
+  end
+
   test "Peep process name can be used with Peep.Storage" do
     name = :"#{__MODULE__}_storage"
 
