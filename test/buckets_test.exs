@@ -17,41 +17,44 @@ defmodule BucketsTest do
         ]
       )
 
-    config = CustomBuckets.config(dist)
+    assert CustomBuckets.config(dist) == %{}
 
-    assert config == %{}
-
-    assert CustomBuckets.bucket_for(3, config) == 0
-    assert CustomBuckets.bucket_for(3.13, config) == 0
-    assert CustomBuckets.bucket_for(3.14, config) == 1
-    assert CustomBuckets.bucket_for(3.49, config) == 1
-    assert CustomBuckets.bucket_for(3.50, config) == 2
-    assert CustomBuckets.bucket_for(5, config) == 3
-    assert CustomBuckets.bucket_for(14, config) == 4
-    assert CustomBuckets.bucket_for(15, config) == 5
-    assert CustomBuckets.bucket_for(16, config) == 6
-    assert CustomBuckets.bucket_for(22, config) == 6
-    assert CustomBuckets.bucket_for(23, config) == 7
-    assert CustomBuckets.bucket_for(41, config) == 7
-    assert CustomBuckets.bucket_for(42, config) == 8
-    assert CustomBuckets.bucket_for(43, config) == 8
-    assert CustomBuckets.bucket_for(50, config) == 8
-    assert CustomBuckets.bucket_for(50.4, config) == 8
-    assert CustomBuckets.bucket_for(50.5, config) == 9
-    assert CustomBuckets.bucket_for(51, config) == 9
-    assert CustomBuckets.bucket_for(1_000, config) == 10
-
-    assert CustomBuckets.upper_bound(0, config) == "3.14"
-    assert CustomBuckets.upper_bound(1, config) == "3.5"
-    assert CustomBuckets.upper_bound(2, config) == "4.0"
-    assert CustomBuckets.upper_bound(3, config) == "8.0"
-    assert CustomBuckets.upper_bound(4, config) == "15.0"
-    assert CustomBuckets.upper_bound(5, config) == "16.0"
-    assert CustomBuckets.upper_bound(6, config) == "23.0"
-    assert CustomBuckets.upper_bound(7, config) == "42.0"
-    assert CustomBuckets.upper_bound(8, config) == "50.5"
-    assert CustomBuckets.upper_bound(9, config) == "60.0"
-    assert CustomBuckets.upper_bound(1_000, config) == "+Inf"
+    check(CustomBuckets,
+      exp_buckets: %{
+        3 => 0,
+        3.13 => 0,
+        3.14 => 1,
+        3.49 => 1,
+        3.50 => 2,
+        5 => 3,
+        14 => 4,
+        15 => 5,
+        16 => 6,
+        22 => 6,
+        23 => 7,
+        41 => 7,
+        42 => 8,
+        43 => 8,
+        50 => 8,
+        50.4 => 8,
+        50.5 => 9,
+        51 => 9,
+        1_000 => 10
+      },
+      exp_upper_bounds: %{
+        0 => "3.14",
+        1 => "3.5",
+        2 => "4.0",
+        3 => "8.0",
+        4 => "15.0",
+        5 => "16.0",
+        6 => "23.0",
+        7 => "42.0",
+        8 => "50.5",
+        9 => "60.0",
+        1_000 => "+Inf"
+      }
+    )
   end
 
   test "passing a non-number to `use Peep.Buckets.Custom` fails to compile" do
@@ -116,10 +119,18 @@ defmodule BucketsTest do
       end
       |> Code.compile_quoted()
 
-    assert 3 = module.number_of_buckets(%{})
-    assert 0 = module.bucket_for(0, %{})
-    assert 1 = module.bucket_for(1, %{})
-    assert 2 = module.bucket_for(2, %{})
-    assert 3 = module.bucket_for(3, %{})
+    assert module.number_of_buckets(%{}) == 3
+    check(module, exp_buckets: %{0 => 0, 1 => 1, 2 => 2, 3 => 3})
+  end
+
+  defp check(mod, opts) do
+    exp_buckets = Keyword.fetch!(opts, :exp_buckets)
+    exp_upper_bounds = Keyword.get(opts, :exp_upper_bounds, %{})
+
+    assert Map.new(exp_buckets, fn {value, _} -> {value, mod.bucket_for(value, %{})} end) ==
+             exp_buckets
+
+    assert Map.new(exp_upper_bounds, fn {idx, _} -> {idx, mod.upper_bound(idx, %{})} end) ==
+             exp_upper_bounds
   end
 end
