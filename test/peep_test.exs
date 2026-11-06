@@ -215,6 +215,50 @@ defmodule PeepTest do
     )
   end
 
+  test "a measurement can be computed from the event's measurements" do
+    event = event()
+    sum = Metrics.sum("peep.sum", event_name: event, measurement: &(&1.a + &1.b))
+
+    check(
+      metrics: [sum],
+      events: [{event, %{a: 1, b: 2}, %{}}],
+      exp_scrape: %{sum => %{%{} => 3}}
+    )
+  end
+
+  test "a measurement can be computed from the event's measurements and metadata" do
+    event = event()
+    sum = Metrics.sum("peep.sum", event_name: event, measurement: &(&1.value * &2.factor))
+
+    check(
+      metrics: [sum],
+      events: [{event, %{value: 5}, %{factor: 3}}],
+      exp_scrape: %{sum => %{%{} => 15}}
+    )
+  end
+
+  test "a measurement missing from the event counts as 1" do
+    event = event()
+    sum = Metrics.sum("peep.sum", event_name: event, measurement: :value)
+
+    check(
+      metrics: [sum],
+      events: [{event, %{}, %{}}, {event, %{}, %{}}],
+      exp_scrape: %{sum => %{%{} => 2}}
+    )
+  end
+
+  test "a metric can have more than two tag keys" do
+    event = event()
+    counter = Metrics.counter("peep.counter", event_name: event, tags: [:a, :b, :c])
+
+    check(
+      metrics: [counter],
+      events: [{event, %{}, %{a: 1, b: 2, c: 3}}, {event, %{}, %{a: 1, c: 3}}],
+      exp_scrape: %{counter => %{%{a: 1, b: 2, c: 3} => 1, %{a: 1, c: 3} => 1}}
+    )
+  end
+
   defp check(opts) do
     name =
       Peep.Test.start_peep!(
