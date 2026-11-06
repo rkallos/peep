@@ -23,8 +23,7 @@ defmodule Peep.Storage.Striped do
     opts = [
       :public,
       read_concurrency: false,
-      write_concurrency: true,
-      decentralized_counters: true
+      write_concurrency: false
     ]
 
     n_schedulers = :erlang.system_info(:schedulers_online)
