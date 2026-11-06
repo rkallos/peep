@@ -21,39 +21,63 @@ defmodule Peep.Storage.Test do
   @impls Application.compile_env(:peep, :test_storages)
 
   for impl <- @impls do
-    test "#{inspect(impl)} - a counter counts its inserts per tags map" do
-      counter = Metrics.counter("storage.test.counter")
+    test "#{inspect(impl)} - a counter counts its events per tags map" do
+      event = event()
+      counter = Metrics.counter("storage.test.counter", event_name: event, tags: [:even])
 
       check(unquote(impl),
         metrics: [counter],
-        inserts: [{counter, 1, %{}}, {counter, 1, %{}}, {counter, 1, %{even: true}}],
+        events: [{event, %{}, %{}}, {event, %{}, %{}}, {event, %{}, %{even: true}}],
         exp_scrape: %{counter => %{%{} => 2, %{even: true} => 1}}
       )
     end
 
-    test "#{inspect(impl)} - a sum adds its inserts per tags map" do
-      sum = Metrics.sum("storage.test.sum")
+    test "#{inspect(impl)} - a sum adds its measurements per tags map" do
+      event = event()
+      sum = Metrics.sum("storage.test.sum", event_name: event, measurement: :value, tags: [:even])
 
       check(unquote(impl),
         metrics: [sum],
-        inserts: [{sum, 2, %{}}, {sum, 2, %{}}, {sum, 3, %{even: true}}],
+        events: [
+          {event, %{value: 2}, %{}},
+          {event, %{value: 2}, %{}},
+          {event, %{value: 3}, %{even: true}}
+        ],
         exp_scrape: %{sum => %{%{} => 4, %{even: true} => 3}}
       )
     end
 
-    test "#{inspect(impl)} - a last_value keeps its last insert per tags map" do
-      last_value = Metrics.last_value("storage.test.gauge")
+    test "#{inspect(impl)} - a last_value keeps its last measurement per tags map" do
+      event = event()
+
+      last_value =
+        Metrics.last_value("storage.test.gauge",
+          event_name: event,
+          measurement: :value,
+          tags: [:odd]
+        )
 
       check(unquote(impl),
         metrics: [last_value],
-        inserts: [{last_value, 1, %{}}, {last_value, 10, %{}}, {last_value, 9, %{odd: true}}],
+        events: [
+          {event, %{value: 1}, %{}},
+          {event, %{value: 10}, %{}},
+          {event, %{value: 9}, %{odd: true}}
+        ],
         exp_scrape: %{last_value => %{%{} => 10, %{odd: true} => 9}}
       )
     end
 
     test "#{inspect(impl)} - binary tag values round-trip byte-for-byte" do
-      counter = Metrics.counter("storage.test.counter", tags: [:t])
-      last_value = Metrics.last_value("storage.test.gauge", tags: [:t])
+      event = event()
+      counter = Metrics.counter("storage.test.counter", event_name: event, tags: [:t])
+
+      last_value =
+        Metrics.last_value("storage.test.gauge",
+          event_name: event,
+          measurement: :value,
+          tags: [:t]
+        )
 
       # Erlang binaries are byte strings, not necessarily UTF-8, so a storage
       # backend must not treat them as text - it has to hand back the exact
@@ -65,8 +89,7 @@ defmodule Peep.Storage.Test do
       # mangled the bytes can't pass by mangling both sides of a lookup.
       check(unquote(impl),
         metrics: [counter, last_value],
-        inserts:
-          Enum.flat_map([utf8, not_utf8], &[{counter, 1, %{t: &1}}, {last_value, 7, %{t: &1}}]),
+        events: [{event, %{value: 7}, %{t: utf8}}, {event, %{value: 7}, %{t: not_utf8}}],
         exp_scrape: %{
           counter => %{%{t: utf8} => 1, %{t: not_utf8} => 1},
           last_value => %{%{t: utf8} => 7, %{t: not_utf8} => 7}
@@ -75,12 +98,18 @@ defmodule Peep.Storage.Test do
     end
 
     test "#{inspect(impl)} - a distribution can be stored and retrieved" do
+      event = event()
+
       dist =
-        Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+        Metrics.distribution("storage.test.distribution",
+          event_name: event,
+          measurement: :value,
+          reporter_options: [max_value: 1000]
+        )
 
       check(unquote(impl),
         metrics: [dist],
-        inserts: for(i <- 0..2000, do: {dist, i, %{}}),
+        events: for(i <- 0..2000, do: {event, %{value: i}, %{}}),
         exp_scrape: %{
           dist => %{
             %{} => %{
@@ -129,14 +158,18 @@ defmodule Peep.Storage.Test do
     end
 
     test "#{inspect(impl)} - distribution bucket variability" do
+      event = event()
+
       dist =
         Metrics.distribution("storage.test.distribution",
+          event_name: event,
+          measurement: :value,
           reporter_options: [max_value: 1000, bucket_variability: 0.25]
         )
 
       check(unquote(impl),
         metrics: [dist],
-        inserts: for(i <- 0..1000, do: {dist, i, %{}}),
+        events: for(i <- 0..1000, do: {event, %{value: i}, %{}}),
         exp_scrape: %{
           dist => %{
             %{} => %{
@@ -164,14 +197,18 @@ defmodule Peep.Storage.Test do
     end
 
     test "#{inspect(impl)} - default distribution handles negative values" do
+      event = event()
+
       dist =
         Metrics.distribution("storage.test.distribution",
+          event_name: event,
+          measurement: :value,
           reporter_options: [max_value: 500, bucket_variability: 0.25]
         )
 
       check(unquote(impl),
         metrics: [dist],
-        inserts: for(i <- -500..500, do: {dist, i, %{}}),
+        events: for(i <- -500..500, do: {event, %{value: i}, %{}}),
         exp_scrape: %{
           dist => %{
             %{} => %{
@@ -197,16 +234,21 @@ defmodule Peep.Storage.Test do
       )
     end
 
-    test "#{inspect(impl)} - concurrent inserts are all recorded" do
-      counter = Metrics.counter("storage.test.counter")
-      sum = Metrics.sum("storage.test.sum")
+    test "#{inspect(impl)} - events from concurrent processes are all recorded" do
+      event = event()
+      counter = Metrics.counter("storage.test.counter", event_name: event)
+      sum = Metrics.sum("storage.test.sum", event_name: event, measurement: :value)
 
       dist =
-        Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+        Metrics.distribution("storage.test.distribution",
+          event_name: event,
+          measurement: :value,
+          reporter_options: [max_value: 1000]
+        )
 
       check(unquote(impl),
         metrics: [counter, sum, dist],
-        inserts: Enum.flat_map(1..10, &[{counter, 1, %{}}, {sum, &1, %{}}, {dist, &1, %{}}]),
+        events: for(i <- 1..10, do: {event, %{value: i}, %{}}),
         tasks: 100,
         exp_scrape: %{
           counter => %{%{} => 1000},
@@ -218,27 +260,26 @@ defmodule Peep.Storage.Test do
       )
     end
 
+    test "#{inspect(impl)} - metrics with a keep are only recorded for matching events" do
+      event = event()
+      keep = fn metadata -> metadata[:kept] == true end
+      kept = Metrics.sum("storage.test.kept", event_name: event, measurement: :value, keep: keep)
+      unfiltered = Metrics.sum("storage.test.unfiltered", event_name: event, measurement: :value)
+
+      check(unquote(impl),
+        metrics: [kept, unfiltered],
+        events: [{event, %{value: 10}, %{kept: true}}, {event, %{value: 99}, %{kept: false}}],
+        exp_scrape: %{kept => %{%{} => 10}, unfiltered => %{%{} => 109}}
+      )
+    end
+
     test "#{inspect(impl)} - storage_size/1" do
-      counter = Metrics.counter("storage.test.counter")
-      sum = Metrics.sum("storage.test.sum")
-      last_value = Metrics.last_value("storage.test.gauge")
-
-      dist =
-        Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
-
-      metrics = [counter, sum, last_value, dist]
-
+      metrics = prune_metrics()
       name = Peep.Test.start_peep!(storage: unquote(impl), metrics: metrics)
 
-      tags_sets = [
-        %{},
-        %{foo: :bar},
-        %{baz: :quux}
-      ]
-
-      for metric <- metrics, tags <- tags_sets do
+      for metric <- metrics, tags <- [%{}, %{foo: :bar}, %{baz: :quux}] do
         %{size: size_before, memory: mem_before} = Peep.storage_size(name)
-        Peep.Test.insert_metric(name, metric, 5, tags)
+        :telemetry.execute(metric.event_name, %{value: 5}, tags)
         %{size: size_after, memory: mem_after} = Peep.storage_size(name)
 
         assert size_after > size_before
@@ -251,7 +292,7 @@ defmodule Peep.Storage.Test do
 
       check(unquote(impl),
         metrics: metrics,
-        inserts: prune_inserts(metrics),
+        events: prune_events(metrics),
         prune: [%{foo: :bar}, %{baz: :quux}],
         exp_scrape: %{}
       )
@@ -262,7 +303,7 @@ defmodule Peep.Storage.Test do
 
       check(unquote(impl),
         metrics: metrics,
-        inserts: prune_inserts(metrics),
+        events: prune_events(metrics),
         prune: [%{foo: :bar, baz: :quux}],
         exp_scrape: pruned_scrape(metrics, [%{foo: :bar}, %{baz: :quux}])
       )
@@ -273,7 +314,7 @@ defmodule Peep.Storage.Test do
 
       check(unquote(impl),
         metrics: metrics,
-        inserts: prune_inserts(metrics),
+        events: prune_events(metrics),
         prune: [%{foo: :blah}, %{foo: :bar}],
         exp_scrape: pruned_scrape(metrics, [%{baz: :quux}])
       )
@@ -282,17 +323,17 @@ defmodule Peep.Storage.Test do
 
   defp check(impl, opts) do
     name = Peep.Test.start_peep!(storage: impl, metrics: Keyword.fetch!(opts, :metrics))
-    inserts = Keyword.fetch!(opts, :inserts)
+    events = Keyword.fetch!(opts, :events)
 
-    insert = fn ->
-      for {metric, value, tags} <- inserts do
-        Peep.Test.insert_metric(name, metric, value, tags)
+    emit = fn ->
+      for {event, measurements, metadata} <- events do
+        :telemetry.execute(event, measurements, metadata)
       end
     end
 
     case Keyword.get(opts, :tasks, 1) do
-      1 -> insert.()
-      tasks -> 1..tasks |> Enum.map(fn _ -> Task.async(insert) end) |> Task.await_many()
+      1 -> emit.()
+      tasks -> 1..tasks |> Enum.map(fn _ -> Task.async(emit) end) |> Task.await_many()
     end
 
     if patterns = opts[:prune] do
@@ -303,19 +344,26 @@ defmodule Peep.Storage.Test do
   end
 
   defp prune_metrics do
+    opts = [measurement: :value, tags: [:foo, :baz]]
+
     [
-      Metrics.counter("storage.test.counter"),
-      Metrics.sum("storage.test.sum"),
-      Metrics.last_value("storage.test.gauge"),
-      Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])
+      Metrics.counter("storage.test.counter", [event_name: event()] ++ opts),
+      Metrics.sum("storage.test.sum", [event_name: event()] ++ opts),
+      Metrics.last_value("storage.test.gauge", [event_name: event()] ++ opts),
+      Metrics.distribution(
+        "storage.test.distribution",
+        [event_name: event(), reporter_options: [max_value: 1000]] ++ opts
+      )
     ]
   end
 
-  defp prune_inserts(metrics) do
-    for metric <- metrics, tags <- [%{foo: :bar}, %{baz: :quux}], do: {metric, 5, tags}
+  defp prune_events(metrics) do
+    for metric <- metrics, tags <- [%{foo: :bar}, %{baz: :quux}] do
+      {metric.event_name, %{value: 5}, tags}
+    end
   end
 
-  # The scrape after `prune_inserts/1`, keeping only the series under `tags`.
+  # The scrape after `prune_events/1`, keeping only the series under `tags`.
   defp pruned_scrape(metrics, tags) do
     Map.new(metrics, fn metric ->
       value =
@@ -328,4 +376,6 @@ defmodule Peep.Storage.Test do
       {metric, Map.new(tags, &{&1, value})}
     end)
   end
+
+  defp event, do: [Peep.Test.fresh_id()]
 end
