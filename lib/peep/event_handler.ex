@@ -68,99 +68,57 @@ defmodule Peep.EventHandler do
 
   defp store_metrics([], _measurements, _metadata, _data, _tag_results), do: :ok
 
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             type: :counter,
-             insert_fn: insert_fn,
-             keep: :no_keep,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    insert_fn.(data, 1, elem(tag_results, tag_idx))
-    store_metrics(rest, measurements, metadata, data, tag_results)
-  end
+  # Order matters; literal :no_keep and :counter clauses must precede the catch-alls.
+  clause_order = [
+    %{keep?: false, counter?: true},
+    %{keep?: false, counter?: false},
+    %{keep?: true, counter?: true},
+    %{keep?: true, counter?: false}
+  ]
 
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             insert_fn: insert_fn,
-             keep: :no_keep,
-             measurement: measurement,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    case fetch_measurement(measurement, measurements, metadata) do
-      value when is_number(value) ->
-        insert_fn.(data, value, elem(tag_results, tag_idx))
+  # Dialyzer sees the `if true` and `case 1` the template leaves before the compiler folds them.
+  @dialyzer {:no_match, store_metrics: 5}
 
-      _ ->
-        nil
-    end
+  for %{keep?: keep?, counter?: counter?} <- clause_order do
+    type = if counter?, do: :counter, else: quote(do: _)
+    keep = if keep?, do: quote(do: var!(keep)), else: :no_keep
+    measurement = if counter?, do: quote(do: _), else: quote(do: var!(measurement))
 
-    store_metrics(rest, measurements, metadata, data, tag_results)
-  end
+    kept? =
+      if keep?,
+        do: quote(do: keep?(var!(keep), var!(metadata), var!(measurements))),
+        else: true
 
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             type: :counter,
-             insert_fn: insert_fn,
-             keep: keep,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    if keep?(keep, metadata, measurements) do
-      insert_fn.(data, 1, elem(tag_results, tag_idx))
-    end
+    value =
+      if counter?,
+        do: 1,
+        else: quote(do: fetch_measurement(var!(measurement), var!(measurements), var!(metadata)))
 
-    store_metrics(rest, measurements, metadata, data, tag_results)
-  end
-
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             insert_fn: insert_fn,
-             keep: keep,
-             measurement: measurement,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    if keep?(keep, metadata, measurements) do
-      case fetch_measurement(measurement, measurements, metadata) do
-        value when is_number(value) ->
-          insert_fn.(data, value, elem(tag_results, tag_idx))
-
-        _ ->
-          nil
+    defp store_metrics(
+           [
+             Metric.handler_metric(
+               type: unquote(type),
+               insert_fn: insert_fn,
+               keep: unquote(keep),
+               measurement: unquote(measurement),
+               tag_idx: tag_idx
+             )
+             | rest
+           ],
+           measurements,
+           metadata,
+           data,
+           tag_results
+         ) do
+      if unquote(kept?) do
+        case unquote(value) do
+          value when is_number(value) -> insert_fn.(data, value, elem(tag_results, tag_idx))
+          _ -> nil
+        end
       end
-    end
 
-    store_metrics(rest, measurements, metadata, data, tag_results)
+      store_metrics(rest, measurements, metadata, data, tag_results)
+    end
   end
 
   defp keep?(keep, metadata, measurement) when is_function(keep, 2),
