@@ -24,7 +24,6 @@ defmodule PlugTest do
   describe "call/2" do
     setup [:setup_peep_worker]
 
-    @tag :capture_log
     test "returns 503 if the metrics worker has not started", %{name: name} do
       stop_supervised!(name)
       opts = Peep.Plug.init(peep_worker: name)
