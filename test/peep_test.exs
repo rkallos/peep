@@ -1,6 +1,5 @@
 defmodule PeepTest do
   use ExUnit.Case, async: true
-  import ExUnit.CaptureLog
 
   doctest Peep
 
@@ -103,27 +102,20 @@ defmodule PeepTest do
     )
   end
 
+  @tag capture_log: true
   test "Summary metrics are dropped" do
-    name = :"#{__MODULE__}_unsupported"
+    [event_one, event_two] = [event(), event()]
 
-    options = [
-      name: name,
+    check(
       metrics: [
-        Metrics.summary("peep.summary"),
-        Metrics.summary("another.peep.summary")
-      ]
-    ]
+        Metrics.summary("peep.summary", event_name: event_one),
+        Metrics.summary("another.peep.summary", event_name: event_two)
+      ],
+      exp_scrape: %{}
+    )
 
-    logs =
-      capture_log(fn ->
-        {:ok, _pid} = Peep.start_link(options)
-      end)
-
-    assert %{} == Peep.get_all_metrics(name)
-
-    for event_name <- [[:peep, :summary], [:another, :peep, :summary]] do
-      assert String.contains?(logs, "Dropping #{inspect(event_name)}")
-    end
+    assert :telemetry.list_handlers(event_one) == []
+    assert :telemetry.list_handlers(event_two) == []
   end
 
   test "Handlers are detached on shutdown" do
