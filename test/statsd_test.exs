@@ -173,6 +173,16 @@ defmodule StatsdTest do
     )
   end
 
+  test "float values are formatted with at most two decimals" do
+    last_value = Metrics.last_value("statsd.test.gauge")
+    sum = Metrics.sum("statsd.test.sum")
+
+    check(
+      scrape: %{last_value => %{%{} => 1.234}, sum => %{%{} => 2.5}},
+      exp_lines: ["statsd.test.gauge:1.23|g", "statsd.test.sum:2.5|c"]
+    )
+  end
+
   test "a distribution can be formatted (standard)" do
     dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
 
