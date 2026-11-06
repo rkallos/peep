@@ -5,8 +5,21 @@ defmodule StatsdTest do
   alias Peep.Statsd.Cache
   alias Telemetry.Metrics
 
-  test "starts successfully with statsd options configured" do
-    assert _name = Peep.Test.start_peep!(metrics: [], statsd: [host: "127.0.0.1", port: 8125])
+  test "a worker with statsd options sends its metrics over UDP" do
+    {:ok, socket} = :gen_udp.open(0, [:binary, active: true, ip: {127, 0, 0, 1}])
+    {:ok, port} = :inet.port(socket)
+    event = [Peep.Test.fresh_id()]
+    counter = Metrics.counter("statsd.test.counter", event_name: event)
+
+    Peep.Test.start_peep!(
+      metrics: [counter],
+      statsd: [host: "127.0.0.1", port: port, flush_interval_ms: 10]
+    )
+
+    :telemetry.execute(event, %{})
+
+    assert_receive {:udp, ^socket, _address, _port, "statsd.test.counter:1|c\n"}
+    refute_receive {:udp, ^socket, _address, _port, _packet}, 100
   end
 
   test "a counter can be formatted" do
