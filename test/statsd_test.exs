@@ -13,7 +13,7 @@ defmodule StatsdTest do
 
     check(
       scrape: %{counter => %{%{} => 10, %{even: true} => 5}},
-      exp_packets: ["statsd.test.counter:10|c", "statsd.test.counter:5|c|#even:true"]
+      exp_lines: ["statsd.test.counter:10|c", "statsd.test.counter:5|c|#even:true"]
     )
   end
 
@@ -22,7 +22,7 @@ defmodule StatsdTest do
 
     check(
       scrape: %{sum => %{%{} => 10, %{even: true} => 5}},
-      exp_packets: ["statsd.test.sum:10|c", "statsd.test.sum:5|c|#even:true"]
+      exp_lines: ["statsd.test.sum:10|c", "statsd.test.sum:5|c|#even:true"]
     )
   end
 
@@ -31,7 +31,7 @@ defmodule StatsdTest do
 
     check(
       scrape: %{last_value => %{%{} => 10, %{odd: true} => 9}},
-      exp_packets: ["statsd.test.gauge:10|g", "statsd.test.gauge:9|g|#odd:true"]
+      exp_lines: ["statsd.test.gauge:10|g", "statsd.test.gauge:9|g|#odd:true"]
     )
   end
 
@@ -46,7 +46,7 @@ defmodule StatsdTest do
         }
       },
       formatter: :standard,
-      exp_packets: [
+      exp_lines: [
         "statsd.test.dist:1.0|ms|@1.0",
         "statsd.test.dist:2.23152|ms|@1.0",
         "statsd.test.dist:3.333505|ms|@1.0",
@@ -102,7 +102,7 @@ defmodule StatsdTest do
         }
       },
       formatter: :datadog,
-      exp_packets: [
+      exp_lines: [
         "statsd.test.dist:1.0|d|@1.0",
         "statsd.test.dist:2.23152|d|@1.0",
         "statsd.test.dist:3.333505|d|@1.0",
@@ -152,7 +152,7 @@ defmodule StatsdTest do
 
     check(
       scrape: %{dist => %{%{} => Peep.Test.distribution_series(dist, [50, 500, 5000])}},
-      exp_packets: ["statsd.test.dist:55.335459|ms|@1.0"]
+      exp_lines: ["statsd.test.dist:55.335459|ms|@1.0"]
     )
   end
 
@@ -167,38 +167,26 @@ defmodule StatsdTest do
         {Metrics.last_value("statsd.test.gauge.#{i}"), %{%{} => 10}}
       end
 
-    exp_packets =
+    exp_lines =
       Enum.map(1..10, &"statsd.test.sum.#{&1}:55|c") ++
         Enum.map(1..10, &"statsd.test.gauge.#{&1}:10|g")
 
-    check(scrape: scrape, mtu: 100, exp_packets: exp_packets)
-    check(scrape: scrape, mtu: 200, exp_packets: exp_packets)
+    check(scrape: scrape, mtu: 100, exp_lines: exp_lines)
+    check(scrape: scrape, mtu: 200, exp_lines: exp_lines)
   end
 
   defp check(opts) do
     scrape = Keyword.fetch!(opts, :scrape)
     formatter = Keyword.get(opts, :formatter, :standard)
     mtu = Keyword.get(opts, :mtu, 1_000_000)
-    exp_packets = Keyword.fetch!(opts, :exp_packets)
+    exp_lines = Keyword.fetch!(opts, :exp_lines)
 
     state = Statsd.make_state(%{formatter: formatter, mtu: mtu})
     {_cache, packets} = Statsd.prepare(scrape, state)
     packets = Enum.map(packets, &IO.iodata_to_binary(&1.lines))
+    lines = Enum.flat_map(packets, &String.split(&1, "\n", trim: true))
 
-    assert parse_packets(packets) == parse_packets(exp_packets)
+    assert Enum.sort(lines) == Enum.sort(exp_lines)
     assert Enum.all?(packets, &(byte_size(&1) <= mtu))
   end
-
-  defp parse_packets(packets) do
-    for packet <- packets, line <- String.split(packet, "\n", trim: true), into: MapSet.new() do
-      {:ok, props, "", _, _, _} = StatsdParser.parse(line)
-
-      props
-      |> Map.new()
-      |> Map.update(:tags, %{}, &parse_tags/1)
-    end
-  end
-
-  defp parse_tags(tags),
-    do: Map.new(tags, fn {:tag, [name: name, value: value]} -> {name, value} end)
 end
