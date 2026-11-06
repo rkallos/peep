@@ -38,13 +38,12 @@ defmodule Peep.MixProject do
       {:telemetry, "~> 1.4"},
       {:telemetry_metrics, "~> 1.0"},
       # testing, docs, & linting
-      {:bandit, "~> 1.6", only: [:test], runtime: false},
+      {:bandit, "~> 1.6", only: [:test]},
       {:benchee, "~> 1.5", only: [:dev], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:inch_ex, "~> 2.0", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev], runtime: false},
-      {:nimble_parsec, "~> 1.4", only: [:dev, :test], runtime: false},
       {:plug_cowboy, "~> 2.7", only: [:test]},
 
       # Optional dependencies

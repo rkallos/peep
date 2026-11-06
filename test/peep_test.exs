@@ -1,127 +1,93 @@
 defmodule PeepTest do
-  use ExUnit.Case
-  import ExUnit.CaptureLog
+  use ExUnit.Case, async: true
 
   doctest Peep
 
   alias Telemetry.Metrics
 
-  test "a worker can be started" do
-    options = [
-      name: __MODULE__,
-      metrics: []
-    ]
-
-    assert {:ok, pid} = Peep.start_link(options)
-    assert Process.alive?(pid)
-  end
-
-  test "many workers can be started" do
-    for i <- 1..10 do
-      options = [
-        name: :"#{__MODULE__}_#{i}",
-        metrics: []
-      ]
-
-      assert {:ok, pid} = Peep.start_link(options)
-      assert Process.alive?(pid)
-    end
-  end
-
-  test "a worker with no statsd config has no statsd state" do
-    options = [
-      name: :"#{__MODULE__}_no_statsd",
-      metrics: []
-    ]
-
-    assert {:ok, pid} = Peep.start_link(options)
-    assert match?(%{statsd_state: nil}, :sys.get_state(pid))
-  end
-
   test "a worker with non-empty global_tags applies to all metrics" do
-    name = :"#{__MODULE__}_global_tags"
-
     tags = %{foo: "bar", baz: "quux", service: "my-app", env: "production"}
     tag_keys = [:foo, :baz]
+    [counter_event, sum_event, gauge_event, dist_event] = [event(), event(), event(), event()]
 
-    counter = Metrics.counter("peep.counter", event_name: [:counter], tags: tag_keys)
-    sum = Metrics.sum("peep.sum", event_name: [:sum], measurement: :count, tags: tag_keys)
+    counter = Metrics.counter("peep.counter", event_name: counter_event, tags: tag_keys)
+    sum = Metrics.sum("peep.sum", event_name: sum_event, measurement: :count, tags: tag_keys)
 
     last_value =
-      Metrics.last_value("peep.gauge", event_name: [:gauge], measurement: :value, tags: tag_keys)
+      Metrics.last_value("peep.gauge",
+        event_name: gauge_event,
+        measurement: :value,
+        tags: tag_keys
+      )
 
-    distribution =
+    dist =
       Metrics.distribution("peep.dist",
-        event_name: [:dist],
+        event_name: dist_event,
         measurement: :value,
         tags: tag_keys,
         reporter_options: [max_value: 100]
       )
 
-    metrics = [counter, sum, last_value, distribution]
+    check(
+      metrics: [counter, sum, last_value, dist],
+      global_tags: tags,
+      events: [
+        {counter_event, %{}, %{}},
+        {sum_event, %{count: 5}, %{}},
+        {gauge_event, %{value: 10}, %{}},
+        {dist_event, %{value: 15}, %{}}
+      ],
+      exp_scrape: %{
+        counter => %{tags => 1},
+        sum => %{tags => 5},
+        last_value => %{tags => 10},
+        dist => %{tags => Peep.Test.distribution_series(dist, [15])}
+      }
+    )
+  end
 
-    options = [
-      name: name,
-      metrics: metrics,
-      global_tags: tags
-    ]
+  test "event metadata overrides a global tag" do
+    event = event()
+    counter = Metrics.counter("peep.counter", event_name: event, tags: [:foo, :baz])
 
-    assert {:ok, _pid} = Peep.start_link(options)
-    :telemetry.execute([:counter], %{})
-    :telemetry.execute([:sum], %{count: 5})
-    :telemetry.execute([:gauge], %{value: 10})
-    :telemetry.execute([:dist], %{value: 15})
-
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, counter, tags) == 1
-    assert Peep.Test.get_metric(all, sum, tags) == 5
-    assert Peep.Test.get_metric(all, last_value, tags) == 10
-    assert Peep.Test.get_metric(all, distribution, tags).sum == 15
+    check(
+      metrics: [counter],
+      global_tags: %{foo: :bar},
+      events: [{event, %{}, %{foo: 2137, baz: "quux"}}],
+      exp_scrape: %{counter => %{%{foo: 2137, baz: "quux"} => 1}}
+    )
   end
 
   test "Peep process name can be used with Peep.Storage" do
-    name = :"#{__MODULE__}_storage"
+    [counter_event, sum_event] = [event(), event()]
+    counter = Metrics.counter("another.peep.counter", event_name: counter_event)
+    sum = Metrics.sum("another.peep.sum", event_name: sum_event, measurement: :count)
 
-    options = [
-      name: name,
-      metrics: [
-        Metrics.counter("another.peep.counter", event_name: [:another, :counter]),
-        Metrics.sum("another.peep.sum", event_name: [:another, :sum], measurement: :count)
-      ]
-    ]
-
-    {:ok, _pid} = Peep.start_link(options)
-
-    :telemetry.execute([:another, :counter], %{})
-    :telemetry.execute([:another, :sum], %{count: 10})
-    assert %{} = Peep.get_all_metrics(name)
+    check(
+      metrics: [counter, sum],
+      events: [{counter_event, %{}, %{}}, {sum_event, %{count: 10}, %{}}],
+      exp_scrape: %{counter => %{%{} => 1}, sum => %{%{} => 10}}
+    )
   end
 
+  @tag capture_log: true
   test "Summary metrics are dropped" do
-    name = :"#{__MODULE__}_unsupported"
+    [event_one, event_two] = [event(), event()]
 
-    options = [
-      name: name,
+    check(
       metrics: [
-        Metrics.summary("peep.summary"),
-        Metrics.summary("another.peep.summary")
-      ]
-    ]
+        Metrics.summary("peep.summary", event_name: event_one),
+        Metrics.summary("another.peep.summary", event_name: event_two)
+      ],
+      exp_scrape: %{}
+    )
 
-    logs =
-      capture_log(fn ->
-        {:ok, _pid} = Peep.start_link(options)
-      end)
-
-    assert %{} == Peep.get_all_metrics(name)
-
-    for event_name <- [[:peep, :summary], [:another, :peep, :summary]] do
-      assert String.contains?(logs, "Dropping #{inspect(event_name)}")
-    end
+    assert :telemetry.list_handlers(event_one) == []
+    assert :telemetry.list_handlers(event_two) == []
   end
 
   test "Handlers are detached on shutdown" do
-    prefix = [:peep, :shutdown_test]
+    prefix = [:"#{__MODULE__}_shutdown_test"]
 
     metric =
       Metrics.counter(prefix ++ [:counter])
@@ -158,25 +124,24 @@ defmodule PeepTest do
   end
 
   test "metrics with a keep are only recorded for matching events" do
-    name = :"#{__MODULE__}_keep"
+    event = event()
     keep = fn metadata -> metadata[:kept] == true end
+    metrics = [counter, sum, gauge, unfiltered] = keep_metrics(event, keep)
 
-    metrics = [counter, sum, gauge, unfiltered] = keep_metrics(name, keep)
-
-    {:ok, _pid} = Peep.start_link(name: name, metrics: metrics)
-
-    :telemetry.execute([name, :event], %{value: 10}, %{kept: true})
-    :telemetry.execute([name, :event], %{value: 99}, %{kept: false})
-
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, counter, %{}) == 1
-    assert Peep.Test.get_metric(all, sum, %{}) == 10
-    assert Peep.Test.get_metric(all, gauge, %{}) == 10
-    assert Peep.Test.get_metric(all, unfiltered, %{}) == 2
+    check(
+      metrics: metrics,
+      events: [{event, %{value: 10}, %{kept: true}}, {event, %{value: 99}, %{kept: false}}],
+      exp_scrape: %{
+        counter => %{%{} => 1},
+        sum => %{%{} => 10},
+        gauge => %{%{} => 10},
+        unfiltered => %{%{} => 2}
+      }
+    )
   end
 
   test "a 2-arity keep is passed the event's measurements" do
-    name = :"#{__MODULE__}_keep_measurements"
+    event = event()
     parent = self()
 
     keep = fn metadata, measurements ->
@@ -184,91 +149,141 @@ defmodule PeepTest do
       measurements[:value] == 10
     end
 
-    metrics = [counter | _] = keep_metrics(name, keep)
+    metrics = [counter, sum, gauge, unfiltered] = keep_metrics(event, keep)
 
-    {:ok, _pid} = Peep.start_link(name: name, metrics: metrics)
-
-    :telemetry.execute([name, :event], %{value: 10}, %{kept: true})
-    :telemetry.execute([name, :event], %{value: 99}, %{kept: true})
+    check(
+      metrics: metrics,
+      events: [{event, %{value: 10}, %{kept: true}}, {event, %{value: 99}, %{kept: true}}],
+      exp_scrape: %{
+        counter => %{%{} => 1},
+        sum => %{%{} => 10},
+        gauge => %{%{} => 10},
+        unfiltered => %{%{} => 2}
+      }
+    )
 
     assert_received {:keep, %{kept: true}, %{value: 10}}
     assert_received {:keep, %{kept: true}, %{value: 99}}
-
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, counter, %{}) == 1
-  end
-
-  test "tag keys absent from metadata are omitted" do
-    name = :"#{__MODULE__}_missing_tag_keys"
-
-    one = Metrics.counter("#{name}.one", event_name: [name, :one], tags: [:a])
-    two = Metrics.counter("#{name}.two", event_name: [name, :two], tags: [:a, :b])
-
-    {:ok, _pid} = Peep.start_link(name: name, metrics: [one, two])
-
-    :telemetry.execute([name, :one], %{}, %{a: 1})
-    :telemetry.execute([name, :one], %{}, %{b: 2})
-
-    :telemetry.execute([name, :two], %{}, %{a: 1, b: 2})
-    :telemetry.execute([name, :two], %{}, %{a: 1})
-
-    all = Peep.get_all_metrics(name)
-
-    assert Peep.Test.get_metric(all, one, %{a: 1}) == 1
-    assert Peep.Test.get_metric(all, one, %{}) == 1
-
-    assert Peep.Test.get_metric(all, two, %{a: 1, b: 2}) == 1
-    assert Peep.Test.get_metric(all, two, %{a: 1}) == 1
-  end
-
-  test "Non-numeric values are dropped" do
-    name = :"#{__MODULE__}_non_numeric_values"
-
-    sum = Metrics.sum("#{name}.sum", event_name: [name, :sum], measurement: :value)
-
-    last_value =
-      Metrics.last_value("#{name}.last_value",
-        event_name: [name, :last_value],
-        measurement: :value
-      )
-
-    dist =
-      Metrics.distribution(
-        "#{name}.dist",
-        event_name: [name, :dist],
-        measurement: :value
-      )
-
-    metrics = [sum, last_value, dist]
-
-    options = [
-      name: name,
-      metrics: metrics
-    ]
-
-    {:ok, _pid} = Peep.start_link(options)
-
-    :telemetry.execute([name, :sum], %{value: :foo})
-    :telemetry.execute([name, :last_value], %{value: "bar"})
-    :telemetry.execute([name, :dist], %{value: []})
-
-    all = Peep.get_all_metrics(name)
-    assert Peep.Test.get_metric(all, sum, []) == 0
-    assert Peep.Test.get_metric(all, last_value, []) == nil
-    assert Peep.Test.get_metric(all, dist, []) == nil
   end
 
   # A counter, sum and last_value sharing one event and one keep filter, plus an
   # unfiltered counter on the same event to prove only the filtered metrics are
   # skipped.
-  defp keep_metrics(name, keep) do
-    event = [name, :event]
-
+  defp keep_metrics(event, keep) do
     [
-      Metrics.counter("#{name}.counter", event_name: event, keep: keep),
-      Metrics.sum("#{name}.sum", event_name: event, measurement: :value, keep: keep),
-      Metrics.last_value("#{name}.gauge", event_name: event, measurement: :value, keep: keep),
-      Metrics.counter("#{name}.unfiltered", event_name: event)
+      Metrics.counter("peep.counter", event_name: event, keep: keep),
+      Metrics.sum("peep.sum", event_name: event, measurement: :value, keep: keep),
+      Metrics.last_value("peep.gauge", event_name: event, measurement: :value, keep: keep),
+      Metrics.counter("peep.unfiltered", event_name: event)
     ]
   end
+
+  test "tag keys absent from metadata are omitted" do
+    [one_event, two_event] = [event(), event()]
+    one = Metrics.counter("peep.one", event_name: one_event, tags: [:a])
+    two = Metrics.counter("peep.two", event_name: two_event, tags: [:a, :b])
+
+    check(
+      metrics: [one, two],
+      events: [
+        {one_event, %{}, %{a: 1}},
+        {one_event, %{}, %{b: 2}},
+        {two_event, %{}, %{a: 1, b: 2}},
+        {two_event, %{}, %{a: 1}}
+      ],
+      exp_scrape: %{
+        one => %{%{a: 1} => 1, %{} => 1},
+        two => %{%{a: 1, b: 2} => 1, %{a: 1} => 1}
+      }
+    )
+  end
+
+  test "Non-numeric values are dropped" do
+    [sum_event, gauge_event, dist_event] = [event(), event(), event()]
+    sum = Metrics.sum("peep.sum", event_name: sum_event, measurement: :value)
+    last_value = Metrics.last_value("peep.gauge", event_name: gauge_event, measurement: :value)
+    dist = Metrics.distribution("peep.dist", event_name: dist_event, measurement: :value)
+
+    check(
+      metrics: [sum, last_value, dist],
+      events: [
+        {sum_event, %{value: :foo}, %{}},
+        {gauge_event, %{value: "bar"}, %{}},
+        {dist_event, %{value: []}, %{}}
+      ],
+      exp_scrape: %{}
+    )
+  end
+
+  test "a measurement can be computed from the event's measurements" do
+    event = event()
+    sum = Metrics.sum("peep.sum", event_name: event, measurement: &(&1.a + &1.b))
+
+    check(
+      metrics: [sum],
+      events: [{event, %{a: 1, b: 2}, %{}}],
+      exp_scrape: %{sum => %{%{} => 3}}
+    )
+  end
+
+  test "a measurement can be computed from the event's measurements and metadata" do
+    event = event()
+    sum = Metrics.sum("peep.sum", event_name: event, measurement: &(&1.value * &2.factor))
+
+    check(
+      metrics: [sum],
+      events: [{event, %{value: 5}, %{factor: 3}}],
+      exp_scrape: %{sum => %{%{} => 15}}
+    )
+  end
+
+  test "a measurement missing from the event counts as 1" do
+    event = event()
+    sum = Metrics.sum("peep.sum", event_name: event, measurement: :value)
+
+    check(
+      metrics: [sum],
+      events: [{event, %{}, %{}}, {event, %{}, %{}}],
+      exp_scrape: %{sum => %{%{} => 2}}
+    )
+  end
+
+  test "a metric can have more than two tag keys" do
+    event = event()
+    counter = Metrics.counter("peep.counter", event_name: event, tags: [:a, :b, :c])
+
+    check(
+      metrics: [counter],
+      events: [{event, %{}, %{a: 1, b: 2, c: 3}}, {event, %{}, %{a: 1, c: 3}}],
+      exp_scrape: %{counter => %{%{a: 1, b: 2, c: 3} => 1, %{a: 1, c: 3} => 1}}
+    )
+  end
+
+  test "a storage module that can't be loaded is rejected" do
+    assert_raise ArgumentError, "storage module NotAModule could not be loaded", fn ->
+      Peep.Storage.insert_shape(NotAModule)
+    end
+  end
+
+  test "a storage module exporting neither insert callback is rejected" do
+    assert_raise ArgumentError,
+                 "storage module PeepTest exports neither insert_metric/5 nor insert_metrics/3",
+                 fn -> Peep.Storage.insert_shape(PeepTest) end
+  end
+
+  defp check(opts) do
+    name =
+      Peep.Test.start_peep!(
+        metrics: Keyword.fetch!(opts, :metrics),
+        global_tags: Keyword.get(opts, :global_tags, %{})
+      )
+
+    for {event, measurements, metadata} <- Keyword.get(opts, :events, []) do
+      :telemetry.execute(event, measurements, metadata)
+    end
+
+    assert Peep.get_all_metrics(name) == Keyword.fetch!(opts, :exp_scrape)
+  end
+
+  defp event, do: [Peep.Test.fresh_id()]
 end

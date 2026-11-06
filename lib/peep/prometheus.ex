@@ -121,9 +121,6 @@ defmodule Peep.Prometheus do
   defp format_name_rest(<<_, rest::binary>>, acc), do: format_name_rest(rest, acc)
   defp format_name_rest(<<>>, acc), do: acc
 
-  defp format_value(true), do: "1"
-  defp format_value(false), do: "0"
-  defp format_value(nil), do: "0"
   defp format_value(n) when is_integer(n), do: Integer.to_string(n)
   defp format_value(f) when is_float(f), do: Float.to_string(f)
 
