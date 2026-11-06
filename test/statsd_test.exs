@@ -4,112 +4,49 @@ defmodule StatsdTest do
   alias Peep.Statsd
   alias Telemetry.Metrics
 
-  @impls [:default, :striped]
-
   test "starts successfully with statsd options configured" do
     assert _name = Peep.Test.start_peep!(metrics: [], statsd: [host: "127.0.0.1", port: 8125])
   end
 
-  for impl <- @impls do
-    describe "#{impl} - global metadata" do
-      test "is present in formatted output" do
-        counter = Metrics.counter("statsd.test.counter", description: "a counter")
+  test "a counter can be formatted" do
+    counter = Metrics.counter("statsd.test.counter")
 
-        name =
-          Peep.Test.start_peep!(
-            metrics: [counter],
-            storage: unquote(impl),
-            global_tags: %{foo: :bar}
-          )
+    check(
+      scrape: %{counter => %{%{} => 10, %{even: true} => 5}},
+      exp_packets: ["statsd.test.counter:10|c", "statsd.test.counter:5|c|#even:true"]
+    )
+  end
 
-        for _ <- 1..10 do
-          Peep.Test.insert_metric(name, counter, 1, %{bar: "quuz"})
-        end
+  test "a sum can be formatted" do
+    sum = Metrics.sum("statsd.test.sum")
 
-        expected = ["statsd.test.counter:10|c|#foo:bar,bar:quuz"]
-        assert parse_packets(get_statsd_packets(name)) == parse_packets(expected)
-      end
+    check(
+      scrape: %{sum => %{%{} => 10, %{even: true} => 5}},
+      exp_packets: ["statsd.test.sum:10|c", "statsd.test.sum:5|c|#even:true"]
+    )
+  end
 
-      test "can be overridden by event metadata" do
-        counter = Metrics.counter("statsd.test.counter", description: "a counter")
+  test "a last_value can be formatted" do
+    last_value = Metrics.last_value("statsd.test.gauge")
 
-        name =
-          Peep.Test.start_peep!(
-            metrics: [counter],
-            storage: unquote(impl),
-            global_tags: %{foo: :bar}
-          )
+    check(
+      scrape: %{last_value => %{%{} => 10, %{odd: true} => 9}},
+      exp_packets: ["statsd.test.gauge:10|g", "statsd.test.gauge:9|g|#odd:true"]
+    )
+  end
 
-        for _ <- 1..10 do
-          Peep.Test.insert_metric(name, counter, 1, %{foo: 2137, bar: "quuz"})
-        end
+  test "a distribution can be formatted (standard)" do
+    dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
 
-        expected = ["statsd.test.counter:10|c|#foo:2137,bar:quuz"]
-        assert parse_packets(get_statsd_packets(name)) == parse_packets(expected)
-      end
-    end
-
-    test "#{impl} - a counter can be formatted" do
-      counter = Metrics.counter("statsd.test.counter")
-      name = Peep.Test.start_peep!(metrics: [counter], storage: unquote(impl))
-
-      for i <- 1..10 do
-        Peep.Test.insert_metric(name, counter, 1, %{})
-
-        if rem(i, 2) == 0 do
-          Peep.Test.insert_metric(name, counter, 1, %{even: true})
-        end
-      end
-
-      expected = ["statsd.test.counter:10|c", "statsd.test.counter:5|c|#even:true"]
-      assert parse_packets(get_statsd_packets(name)) == parse_packets(expected)
-    end
-
-    test "#{impl} - a sum can be formatted" do
-      sum = Metrics.sum("statsd.test.sum")
-      name = Peep.Test.start_peep!(metrics: [sum], storage: unquote(impl))
-
-      for i <- 1..10 do
-        Peep.Test.insert_metric(name, sum, 1, %{})
-
-        if rem(i, 2) == 0 do
-          Peep.Test.insert_metric(name, sum, 1, %{even: true})
-        end
-      end
-
-      expected = ["statsd.test.sum:10|c", "statsd.test.sum:5|c|#even:true"]
-      assert parse_packets(get_statsd_packets(name)) == parse_packets(expected)
-    end
-
-    test "#{impl} - a last_value can be formatted" do
-      last_value = Metrics.last_value("statsd.test.gauge")
-      name = Peep.Test.start_peep!(metrics: [last_value], storage: unquote(impl))
-
-      for i <- 1..10 do
-        Peep.Test.insert_metric(name, last_value, i, %{})
-
-        if rem(i, 2) == 1 do
-          Peep.Test.insert_metric(name, last_value, i, %{odd: true})
-        end
-      end
-
-      expected = ["statsd.test.gauge:10|g", "statsd.test.gauge:9|g|#odd:true"]
-      assert parse_packets(get_statsd_packets(name)) == parse_packets(expected)
-    end
-
-    test "#{impl} - a distribution can be formatted (standard)" do
-      dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
-      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
-
-      for i <- 1..1000 do
-        Peep.Test.insert_metric(name, dist, i, %{})
-
-        if rem(i, 100) == 0 do
-          Peep.Test.insert_metric(name, dist, i, %{foo: :bar})
-        end
-      end
-
-      expected = [
+    check(
+      scrape: %{
+        dist => %{
+          %{} => Peep.Test.distribution_series(dist, 1..1000),
+          %{foo: :bar} => Peep.Test.distribution_series(dist, 100..1000//100)
+        }
+      },
+      formatter: :standard,
+      exp_packets: [
         "statsd.test.dist:1.0|ms|@1.0",
         "statsd.test.dist:2.23152|ms|@1.0",
         "statsd.test.dist:3.333505|ms|@1.0",
@@ -141,7 +78,6 @@ defmodule StatsdTest do
         "statsd.test.dist:751.5464|ms|@0.007299",
         "statsd.test.dist:918.556711|ms|@0.005988",
         "statsd.test.dist:1122.680424|ms|@0.012195",
-        #
         "statsd.test.dist:101.030858|ms|@1.0|#foo:bar",
         "statsd.test.dist:225.452339|ms|@1.0|#foo:bar",
         "statsd.test.dist:336.786827|ms|@1.0|#foo:bar",
@@ -152,25 +88,21 @@ defmodule StatsdTest do
         "statsd.test.dist:918.556711|ms|@0.5|#foo:bar",
         "statsd.test.dist:1122.680424|ms|@1.0|#foo:bar"
       ]
+    )
+  end
 
-      packets = get_statsd_packets(name, %{formatter: :standard})
+  test "a distribution can be formatted (datadog)" do
+    dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
 
-      assert parse_packets(packets) == parse_packets(expected)
-    end
-
-    test "#{impl} - a distribution can be formatted (datadog)" do
-      dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 1000])
-      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
-
-      for i <- 1..1000 do
-        Peep.Test.insert_metric(name, dist, i, %{})
-
-        if rem(i, 100) == 0 do
-          Peep.Test.insert_metric(name, dist, i, %{foo: :bar})
-        end
-      end
-
-      expected = [
+    check(
+      scrape: %{
+        dist => %{
+          %{} => Peep.Test.distribution_series(dist, 1..1000),
+          %{foo: :bar} => Peep.Test.distribution_series(dist, 100..1000//100)
+        }
+      },
+      formatter: :datadog,
+      exp_packets: [
         "statsd.test.dist:1.0|d|@1.0",
         "statsd.test.dist:2.23152|d|@1.0",
         "statsd.test.dist:3.333505|d|@1.0",
@@ -202,7 +134,6 @@ defmodule StatsdTest do
         "statsd.test.dist:751.5464|d|@0.007299",
         "statsd.test.dist:918.556711|d|@0.005988",
         "statsd.test.dist:1122.680424|d|@0.012195",
-        #
         "statsd.test.dist:101.030858|d|@1.0|#foo:bar",
         "statsd.test.dist:225.452339|d|@1.0|#foo:bar",
         "statsd.test.dist:336.786827|d|@1.0|#foo:bar",
@@ -213,132 +144,61 @@ defmodule StatsdTest do
         "statsd.test.dist:918.556711|d|@0.5|#foo:bar",
         "statsd.test.dist:1122.680424|d|@1.0|#foo:bar"
       ]
-
-      packets = get_statsd_packets(name, %{formatter: :datadog})
-      assert parse_packets(packets) == parse_packets(expected)
-    end
-
-    test "#{impl} - above-max distribution samples are excluded from output" do
-      dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 100])
-      name = Peep.Test.start_peep!(metrics: [dist], storage: unquote(impl))
-
-      # Insert one value within range, two above max_value
-      Peep.Test.insert_metric(name, dist, 50, %{})
-      Peep.Test.insert_metric(name, dist, 500, %{})
-      Peep.Test.insert_metric(name, dist, 5000, %{})
-
-      packets = get_statsd_packets(name, %{formatter: :standard})
-      parsed = parse_packets(packets)
-
-      # Only the in-range sample should produce a bucket line
-      assert MapSet.size(parsed) == 1
-      assert [%{name: "statsd.test.dist", type: :dist}] = MapSet.to_list(parsed)
-    end
-
-    test "#{impl} - metrics are batched according to mtu option" do
-      sum = fn i -> Metrics.sum("statsd.test.sum.#{i}") end
-      last_value = fn i -> Metrics.last_value("statsd.test.gauge.#{i}") end
-
-      metrics =
-        Enum.reduce(1..10, [], fn i, acc ->
-          [sum.(i), last_value.(i) | acc]
-        end)
-
-      name = Peep.Test.start_peep!(metrics: metrics, storage: unquote(impl))
-
-      for i <- 1..10 do
-        sum = sum.(i)
-        last_value = last_value.(i)
-
-        for j <- 1..10 do
-          Peep.Test.insert_metric(name, sum, j, %{})
-          Peep.Test.insert_metric(name, last_value, j, %{})
-        end
-      end
-
-      expected_metrics =
-        [
-          "statsd.test.sum.5:55|c",
-          "statsd.test.sum.4:55|c",
-          "statsd.test.sum.3:55|c",
-          "statsd.test.sum.2:55|c",
-          "statsd.test.sum.10:55|c",
-          "statsd.test.sum.1:55|c",
-          "statsd.test.gauge.2:10|g",
-          "statsd.test.gauge.10:10|g",
-          "statsd.test.gauge.1:10|g",
-          "statsd.test.sum.9:55|c",
-          "statsd.test.sum.8:55|c",
-          "statsd.test.sum.7:55|c",
-          "statsd.test.sum.6:55|c",
-          "statsd.test.gauge.9:10|g",
-          "statsd.test.gauge.8:10|g",
-          "statsd.test.gauge.7:10|g",
-          "statsd.test.gauge.6:10|g",
-          "statsd.test.gauge.5:10|g",
-          "statsd.test.gauge.4:10|g",
-          "statsd.test.gauge.3:10|g"
-        ]
-        |> parse_packets()
-
-      packets = get_statsd_packets(name, %{mtu: 100})
-
-      assert parse_packets(packets) == expected_metrics
-
-      for packet <- packets do
-        assert IO.iodata_length(packet) <= 100
-      end
-
-      packets = get_statsd_packets(name, %{mtu: 200})
-
-      assert parse_packets(packets) == expected_metrics
-
-      for packet <- packets do
-        assert IO.iodata_length(packet) <= 200
-      end
-    end
+    )
   end
 
-  defp get_statsd_packets(name, opts \\ %{}) do
-    formatter = opts[:formatter] || :standard
-    mtu = opts[:mtu] || 1_000_000
+  test "above-max distribution samples are excluded from output" do
+    dist = Metrics.distribution("statsd.test.dist", reporter_options: [max_value: 100])
+
+    check(
+      scrape: %{dist => %{%{} => Peep.Test.distribution_series(dist, [50, 500, 5000])}},
+      exp_packets: ["statsd.test.dist:55.335459|ms|@1.0"]
+    )
+  end
+
+  test "metrics are batched according to mtu option" do
+    scrape =
+      for i <- 1..10, into: %{} do
+        {Metrics.sum("statsd.test.sum.#{i}"), %{%{} => 55}}
+      end
+
+    scrape =
+      for i <- 1..10, into: scrape do
+        {Metrics.last_value("statsd.test.gauge.#{i}"), %{%{} => 10}}
+      end
+
+    exp_packets =
+      Enum.map(1..10, &"statsd.test.sum.#{&1}:55|c") ++
+        Enum.map(1..10, &"statsd.test.gauge.#{&1}:10|g")
+
+    check(scrape: scrape, mtu: 100, exp_packets: exp_packets)
+    check(scrape: scrape, mtu: 200, exp_packets: exp_packets)
+  end
+
+  defp check(opts) do
+    scrape = Keyword.fetch!(opts, :scrape)
+    formatter = Keyword.get(opts, :formatter, :standard)
+    mtu = Keyword.get(opts, :mtu, 1_000_000)
+    exp_packets = Keyword.fetch!(opts, :exp_packets)
 
     state = Statsd.make_state(%{formatter: formatter, mtu: mtu})
+    {_cache, packets} = Statsd.prepare(scrape, state)
+    packets = Enum.map(packets, &IO.iodata_to_binary(&1.lines))
 
-    {_cache, packets} =
-      Peep.get_all_metrics(name)
-      |> Statsd.prepare(state)
-
-    for p <- packets do
-      IO.iodata_to_binary(p.lines)
-    end
+    assert parse_packets(packets) == parse_packets(exp_packets)
+    assert Enum.all?(packets, &(byte_size(&1) <= mtu))
   end
 
   defp parse_packets(packets) do
-    for packet <- packets, reduce: MapSet.new() do
-      acc ->
-        new =
-          for metric <- parse_packet(IO.iodata_to_binary(packet)), into: MapSet.new() do
-            metric
-          end
-
-        MapSet.union(acc, new)
-    end
-  end
-
-  defp parse_packet(packet) do
-    for line <- String.split(packet, "\n", trim: true) do
+    for packet <- packets, line <- String.split(packet, "\n", trim: true), into: MapSet.new() do
       {:ok, props, "", _, _, _} = StatsdParser.parse(line)
-      metric_to_map(props)
+
+      props
+      |> Map.new()
+      |> Map.update(:tags, %{}, &parse_tags/1)
     end
   end
 
-  defp metric_to_map(kw) do
-    Enum.into(kw, %{})
-    |> Map.update(:tags, %{}, fn tags ->
-      for {:tag, [name: name, value: value]} <- tags, into: %{} do
-        {name, value}
-      end
-    end)
-  end
+  defp parse_tags(tags),
+    do: Map.new(tags, fn {:tag, [name: name, value: value]} -> {name, value} end)
 end
