@@ -29,6 +29,8 @@ defmodule Peep.Statsd do
     send_packets(packets, cache, state)
   end
 
+  defp fill_packets([], _mtu), do: []
+
   defp fill_packets(metrics, mtu) do
     fill_packets(metrics, mtu, [Packet.new(mtu)])
   end
