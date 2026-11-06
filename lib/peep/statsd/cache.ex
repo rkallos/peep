@@ -104,7 +104,7 @@ defmodule Peep.Statsd.Cache do
     Enum.map_intersperse(segments, ?., &a2b/1)
   end
 
-  defp format_tags([]), do: ""
+  defp format_tags(tags) when map_size(tags) == 0, do: ""
 
   defp format_tags(tags) do
     ["|#" | Enum.map_intersperse(tags, ?,, fn {k, v} -> [a2b(k), ?:, to_string(v)] end)]
