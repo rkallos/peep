@@ -2,6 +2,7 @@ defmodule StatsdTest do
   use ExUnit.Case, async: true
 
   alias Peep.Statsd
+  alias Peep.Statsd.Cache
   alias Telemetry.Metrics
 
   test "starts successfully with statsd options configured" do
@@ -175,6 +176,16 @@ defmodule StatsdTest do
     check(scrape: scrape, mtu: 200, exp_lines: exp_lines)
   end
 
+  test "nothing is sent when nothing changed since the last flush" do
+    counter = Metrics.counter("statsd.test.counter")
+
+    check(
+      prev_scrape: %{counter => %{%{} => 10}},
+      scrape: %{counter => %{%{} => 10}},
+      exp_lines: []
+    )
+  end
+
   defp check(opts) do
     scrape = Keyword.fetch!(opts, :scrape)
     formatter = Keyword.get(opts, :formatter, :standard)
@@ -182,11 +193,12 @@ defmodule StatsdTest do
     exp_lines = Keyword.fetch!(opts, :exp_lines)
 
     state = Statsd.make_state(%{formatter: formatter, mtu: mtu})
+    state = %{state | prev: Cache.new(Keyword.get(opts, :prev_scrape, %{}))}
     {_cache, packets} = Statsd.prepare(scrape, state)
     packets = Enum.map(packets, &IO.iodata_to_binary(&1.lines))
     lines = Enum.flat_map(packets, &String.split(&1, "\n", trim: true))
 
     assert Enum.sort(lines) == Enum.sort(exp_lines)
-    assert Enum.all?(packets, &(byte_size(&1) <= mtu))
+    assert Enum.all?(packets, &(byte_size(&1) in 1..mtu))
   end
 end
