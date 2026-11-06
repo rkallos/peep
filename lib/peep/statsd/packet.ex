@@ -36,7 +36,7 @@ defmodule Peep.Statsd.Packet do
       end
 
     packet_size = max_size - remaining
-    result = :gen_udp.send(socket, host, port, data)
+    result = Peep.UDP.send(socket, host, port, data)
 
     {packet_size, result}
   end
