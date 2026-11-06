@@ -1,6 +1,7 @@
 defmodule PlugTest do
   use ExUnit.Case, async: true
 
+  import Plug.Conn, only: [get_resp_header: 2]
   import Plug.Test
   import Telemetry.Metrics
 
@@ -11,70 +12,81 @@ defmodule PlugTest do
       end
     end
 
-    test "should use the default path is one is not provided" do
-      assert %{metrics_path: "/metrics"} = Peep.Plug.init(peep_worker: :my_peep)
+    test "should use the default path and unmatched path behaviour if none are provided" do
+      assert Peep.Plug.init(peep_worker: :my_peep) == %{
+               metrics_path: "/metrics",
+               peep_worker: :my_peep,
+               on_unmatched_path: :continue
+             }
     end
 
     test "should return a map of all the settings if all are provided" do
-      assert %{metrics_path: "/my-metrics", peep_worker: :my_peep} =
-               Peep.Plug.init(peep_worker: :my_peep, path: "/my-metrics")
+      assert Peep.Plug.init(peep_worker: :my_peep, path: "/my-metrics", on_unmatched_path: :halt) ==
+               %{metrics_path: "/my-metrics", peep_worker: :my_peep, on_unmatched_path: :halt}
     end
   end
 
   describe "call/2" do
-    setup [:setup_peep_worker]
-
-    test "returns 503 if the metrics worker has not started", %{name: name} do
-      stop_supervised!(name)
-      opts = Peep.Plug.init(peep_worker: name)
-      conn = conn(:get, "/metrics")
-      response = Peep.Plug.call(conn, opts)
-
-      assert response.status == 503
-      assert response.resp_body == "Service Unavailable"
+    test "returns 503 if the metrics worker has not started" do
+      check(
+        worker?: false,
+        path: "/metrics",
+        exp_status: 503,
+        exp_content_type: "text/plain; charset=utf-8",
+        exp_body: "Service Unavailable",
+        exp_halted: true
+      )
     end
 
-    test "returns metrics if the worker is running at the default path", %{name: name} do
-      opts = Peep.Plug.init(peep_worker: name)
-      conn = conn(:get, "/metrics")
-      response = Peep.Plug.call(conn, opts)
-
-      assert response.status == 200
+    test "returns metrics if the worker is running at the default path" do
+      check(
+        path: "/metrics",
+        exp_status: 200,
+        exp_content_type: "text/plain; charset=utf-8",
+        exp_body:
+          "# HELP plug_test_counter a counter\n# TYPE plug_test_counter counter\nplug_test_counter 1\n# EOF\n",
+        exp_halted: true
+      )
     end
 
-    test "returns metrics if the worker is running at a custom path", %{name: name} do
-      opts = Peep.Plug.init(peep_worker: name, path: "/my-metrics")
-      conn = conn(:get, "/my-metrics")
-      response = Peep.Plug.call(conn, opts)
-
-      assert response.status == 200
+    test "returns metrics if the worker is running at a custom path" do
+      check(
+        plug_opts: [path: "/my-metrics"],
+        path: "/my-metrics",
+        exp_status: 200,
+        exp_content_type: "text/plain; charset=utf-8",
+        exp_body:
+          "# HELP plug_test_counter a counter\n# TYPE plug_test_counter counter\nplug_test_counter 1\n# EOF\n",
+        exp_halted: true
+      )
     end
 
-    test "returns 400 for non-GET requests at metrics path", %{name: name} do
-      opts = Peep.Plug.init(peep_worker: name)
-
+    test "returns 400 for non-GET requests at metrics path" do
       for method <- [:post, :put, :delete, :patch] do
-        conn = conn(method, "/metrics")
-        response = Peep.Plug.call(conn, opts)
-
-        assert response.status == 400
+        check(
+          method: method,
+          path: "/metrics",
+          exp_status: 400,
+          exp_content_type: "text/plain; charset=utf-8",
+          exp_body: "Invalid Request",
+          exp_halted: true
+        )
       end
     end
 
-    test "returns 404 for non-metrics paths", %{name: name} do
-      opts = Peep.Plug.init(peep_worker: name, on_unmatched_path: :halt)
-      conn = conn(:get, "/not-metrics")
-      response = Peep.Plug.call(conn, opts)
-
-      assert response.status == 404
+    test "returns 404 for non-metrics paths" do
+      check(
+        plug_opts: [on_unmatched_path: :halt],
+        path: "/not-metrics",
+        exp_status: 404,
+        exp_content_type: "text/plain; charset=utf-8",
+        exp_body: "Not Found",
+        exp_halted: true
+      )
     end
 
-    test "does not halt for non-metrics paths by default", %{name: name} do
-      opts = Peep.Plug.init(peep_worker: name)
-      conn = conn(:get, "/not-metrics")
-      response = Peep.Plug.call(conn, opts)
-
-      refute response.halted
+    test "does not halt for non-metrics paths by default" do
+      check(path: "/not-metrics", exp_halted: false)
     end
   end
 
@@ -88,7 +100,7 @@ defmodule PlugTest do
 
       {:ok, _pid} = start_supervised({Bandit, plug: plug, port: port, startup_log: false})
 
-      assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _, _}} =
+      assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _headers, ~c"# EOF\n"}} =
                :httpc.request("http://localhost:#{port}/metrics")
     end
 
@@ -102,19 +114,32 @@ defmodule PlugTest do
       {:ok, _pid} =
         start_supervised({Plug.Cowboy, scheme: :http, plug: plug, options: [port: port]})
 
-      assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _, _}} =
+      assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _headers, ~c"# EOF\n"}} =
                :httpc.request("http://localhost:#{port}/metrics")
     end
   end
 
-  def setup_peep_worker(context) do
+  defp check(opts) do
     name = Peep.Test.fresh_id()
 
-    start_supervised!(
-      {Peep, name: name, metrics: [last_value("vm.memory.total", unit: :byte)]},
-      id: name
-    )
+    if Keyword.get(opts, :worker?, true) do
+      event = [name]
 
-    Map.put(context, :name, name)
+      start_supervised!(
+        {Peep,
+         name: name,
+         metrics: [counter("plug.test.counter", event_name: event, description: "a counter")]}
+      )
+
+      :telemetry.execute(event, %{})
+    end
+
+    plug_opts = Peep.Plug.init([peep_worker: name] ++ Keyword.get(opts, :plug_opts, []))
+    conn = conn(Keyword.get(opts, :method, :get), Keyword.fetch!(opts, :path))
+    conn = Peep.Plug.call(conn, plug_opts)
+
+    assert {conn.status, get_resp_header(conn, "content-type"), conn.resp_body, conn.halted} ==
+             {opts[:exp_status], List.wrap(opts[:exp_content_type]), opts[:exp_body],
+              Keyword.fetch!(opts, :exp_halted)}
   end
 end
