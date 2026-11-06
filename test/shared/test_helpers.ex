@@ -1,50 +1,6 @@
 defmodule Peep.Test do
   @moduledoc false
   alias Telemetry.Metrics
-  require Peep.Persistent
-
-  def insert_metric(name, metric, value, tags) when is_number(value) do
-    case Peep.Persistent.fetch(name) do
-      Peep.Persistent.persistent(
-        storage: {storage_mod, storage},
-        ids_to_metrics: ids_to_metrics
-      ) ->
-        case find_metric_id(ids_to_metrics, metric) do
-          {:ok, id} ->
-            insert_one(storage_mod, storage, id, metric, value, tags)
-
-          :error ->
-            nil
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  def insert_metric(_name, _metric, _value, _tags), do: nil
-
-  defp insert_one(storage_mod, storage, id, metric, value, tags) do
-    resolved = storage_mod.resolve(storage)
-
-    case Peep.Storage.insert_shape(storage_mod) do
-      :batched -> storage_mod.insert_metrics(resolved, {tags}, [{id, metric, value, 0}])
-      :per_metric -> storage_mod.insert_metric(resolved, id, metric, value, tags)
-    end
-  end
-
-  defp find_metric_id(ids_to_metrics, metric) do
-    find_metric_id(ids_to_metrics, metric, tuple_size(ids_to_metrics), 0)
-  end
-
-  defp find_metric_id(_tuple, _metric, size, size), do: :error
-
-  defp find_metric_id(tuple, metric, size, idx) do
-    case elem(tuple, idx) do
-      ^metric -> {:ok, idx}
-      _ -> find_metric_id(tuple, metric, size, idx + 1)
-    end
-  end
 
   def fresh_id do
     :"#{System.unique_integer([:positive])}"
