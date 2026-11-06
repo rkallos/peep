@@ -5,6 +5,10 @@ defmodule BucketsTest do
     use Peep.Buckets.Custom, buckets: [3.14, 3.5, 4, 8, 15, 16, 23, 42, 50.5, 60]
   end
 
+  defmodule ManyBuckets do
+    use Peep.Buckets.Custom, buckets: Enum.map(1..20, &(&1 * 10))
+  end
+
   alias Telemetry.Metrics
 
   test "custom buckets #1" do
@@ -54,6 +58,17 @@ defmodule BucketsTest do
         9 => "60.0",
         1_000 => "+Inf"
       }
+    )
+  end
+
+  test "more than 16 custom buckets are searched as a tree" do
+    check(ManyBuckets,
+      exp_buckets:
+        Map.merge(
+          Map.new(0..210, &{&1, min(div(&1, 10), 20)}),
+          %{9.99 => 0, 10.0 => 1, 155.5 => 15, 199.99 => 19, 200.0 => 20, 1.0e6 => 20}
+        ),
+      exp_upper_bounds: %{0 => "10.0", 9 => "100.0", 19 => "200.0", 20 => "+Inf"}
     )
   end
 
