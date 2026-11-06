@@ -10,8 +10,8 @@ defmodule CustomStorage do
   require Peep.Persistent
   require Peep.Storage.Atomics
 
-  alias Telemetry.Metrics
   alias Peep.Storage
+  alias Telemetry.Metrics
 
   @impl true
   def resolve(agents), do: agents

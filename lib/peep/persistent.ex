@@ -1,6 +1,8 @@
 defmodule Peep.Persistent do
   @moduledoc false
 
+  alias Peep.Storage
+
   require Record
 
   Record.defrecord(:persistent, [
@@ -41,10 +43,10 @@ defmodule Peep.Persistent do
     storage =
       case storage_impl do
         :default ->
-          {Peep.Storage.ETS, Peep.Storage.ETS.new([])}
+          {Storage.ETS, Storage.ETS.new([])}
 
         :striped ->
-          {Peep.Storage.Striped, Peep.Storage.Striped.new([])}
+          {Storage.Striped, Storage.Striped.new([])}
 
         {mod, opts} when is_atom(mod) ->
           {mod, mod.new(opts)}

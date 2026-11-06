@@ -10,7 +10,12 @@ defmodule Peep.Handler.Metric do
     * `insert_fn` — a closure over `storage_mod`, metric id, and the metric
       struct. Calling `insert_fn.(resolved_storage, value, tags)` writes
       directly to the storage backend, avoiding repeated map/struct lookups
-      on every event.
+      on every event. Used by backends implementing
+      `c:Peep.Storage.insert_metric/5`.
+
+    * `id` and `metric` — the same metric id and struct, carried separately for
+      backends implementing `c:Peep.Storage.insert_metrics/3`, which receive
+      them as part of a batch item rather than through a closure.
 
     * `keep` — the keep filter, or `:no_keep` when absent. Splitting `:no_keep`
       from function-valued keeps lets `store_metrics` clause-match into four
@@ -29,12 +34,22 @@ defmodule Peep.Handler.Metric do
 
   require Record
 
-  Record.defrecord(:handler_metric, [:type, :insert_fn, :keep, :measurement, :tag_idx])
+  Record.defrecord(:handler_metric, [
+    :type,
+    :insert_fn,
+    :id,
+    :metric,
+    :keep,
+    :measurement,
+    :tag_idx
+  ])
 
   @type t ::
           record(:handler_metric,
             type: :counter | :other,
             insert_fn: (term(), number(), map() -> any()),
+            id: Peep.metric_id(),
+            metric: Telemetry.Metrics.t(),
             keep: :no_keep | (map() -> boolean()) | (map(), term() -> boolean()),
             measurement: atom() | (map() -> number()) | (map(), map() -> number()) | nil,
             tag_idx: non_neg_integer()
@@ -49,6 +64,8 @@ defmodule Peep.Handler.Metric do
     handler_metric(
       type: metric_type(metric),
       insert_fn: insert_fn,
+      id: id,
+      metric: metric,
       keep: keep_value(metric),
       measurement: metric.measurement,
       tag_idx: tag_idx

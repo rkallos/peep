@@ -18,6 +18,8 @@ defmodule Peep.EventHandler do
           storage: {storage_mod, storage}
         )
       ) do
+    handler_fn = handler_fn(storage_mod)
+
     for {event_name, metrics} <- metrics_by_event do
       handler_id = handler_id(event_name, name)
 
@@ -25,11 +27,18 @@ defmodule Peep.EventHandler do
         :telemetry.attach(
           handler_id,
           event_name,
-          &__MODULE__.handle_event/4,
+          handler_fn,
           Config.new(metrics, storage_mod, storage)
         )
 
       handler_id
+    end
+  end
+
+  defp handler_fn(storage_mod) do
+    case Peep.Storage.insert_shape(storage_mod) do
+      :batched -> &__MODULE__.handle_event_batched/4
+      :per_metric -> &__MODULE__.handle_event/4
     end
   end
 
@@ -58,6 +67,23 @@ defmodule Peep.EventHandler do
     store_metrics(metrics, measurements, metadata, resolved, tag_results)
   end
 
+  def handle_event_batched(
+        _event,
+        measurements,
+        metadata,
+        Config.handler_config(
+          metrics: metrics,
+          storage_mod: storage_mod,
+          storage: storage,
+          tag_fns: tag_fns
+        )
+      ) do
+    resolved = storage_mod.resolve(storage)
+    tag_results = compute_tags(tag_fns, metadata, tuple_size(tag_fns) - 1, [])
+    batch = build_batch(metrics, measurements, metadata, [])
+    storage_mod.insert_metrics(resolved, tag_results, batch)
+  end
+
   defp compute_tags(_tag_fns, _metadata, -1, acc) do
     List.to_tuple(acc)
   end
@@ -67,100 +93,88 @@ defmodule Peep.EventHandler do
   end
 
   defp store_metrics([], _measurements, _metadata, _data, _tag_results), do: :ok
+  defp build_batch([], _measurements, _metadata, acc), do: acc
 
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             type: :counter,
-             insert_fn: insert_fn,
-             keep: :no_keep,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    insert_fn.(data, 1, elem(tag_results, tag_idx))
-    store_metrics(rest, measurements, metadata, data, tag_results)
-  end
+  # Order matters; literal :no_keep and :counter clauses must precede the catch-alls.
+  clause_order = [
+    %{keep?: false, counter?: true},
+    %{keep?: false, counter?: false},
+    %{keep?: true, counter?: true},
+    %{keep?: true, counter?: false}
+  ]
 
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             insert_fn: insert_fn,
-             keep: :no_keep,
-             measurement: measurement,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    case fetch_measurement(measurement, measurements, metadata) do
-      value when is_number(value) ->
-        insert_fn.(data, value, elem(tag_results, tag_idx))
+  # Dialyzer sees the `if true` and `case 1` the template leaves before the compiler folds them.
+  @dialyzer {:no_match, store_metrics: 5, build_batch: 4}
 
-      _ ->
-        nil
-    end
+  for %{keep?: keep?, counter?: counter?} <- clause_order do
+    type = if counter?, do: :counter, else: quote(do: _)
+    keep = if keep?, do: quote(do: var!(keep)), else: :no_keep
+    measurement = if counter?, do: quote(do: _), else: quote(do: var!(measurement))
 
-    store_metrics(rest, measurements, metadata, data, tag_results)
-  end
+    kept? =
+      if keep?,
+        do: quote(do: keep?(var!(keep), var!(metadata), var!(measurements))),
+        else: true
 
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             type: :counter,
-             insert_fn: insert_fn,
-             keep: keep,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    if keep?(keep, metadata, nil) do
-      insert_fn.(data, 1, elem(tag_results, tag_idx))
-    end
+    value =
+      if counter?,
+        do: 1,
+        else: quote(do: fetch_measurement(var!(measurement), var!(measurements), var!(metadata)))
 
-    store_metrics(rest, measurements, metadata, data, tag_results)
-  end
-
-  defp store_metrics(
-         [
-           Metric.handler_metric(
-             insert_fn: insert_fn,
-             keep: keep,
-             measurement: measurement,
-             tag_idx: tag_idx
-           )
-           | rest
-         ],
-         measurements,
-         metadata,
-         data,
-         tag_results
-       ) do
-    if keep?(keep, metadata, nil) do
-      case fetch_measurement(measurement, measurements, metadata) do
-        value when is_number(value) ->
-          insert_fn.(data, value, elem(tag_results, tag_idx))
-
-        _ ->
-          nil
+    defp store_metrics(
+           [
+             Metric.handler_metric(
+               type: unquote(type),
+               insert_fn: insert_fn,
+               keep: unquote(keep),
+               measurement: unquote(measurement),
+               tag_idx: tag_idx
+             )
+             | rest
+           ],
+           measurements,
+           metadata,
+           data,
+           tag_results
+         ) do
+      if unquote(kept?) do
+        case unquote(value) do
+          value when is_number(value) -> insert_fn.(data, value, elem(tag_results, tag_idx))
+          _ -> nil
+        end
       end
+
+      store_metrics(rest, measurements, metadata, data, tag_results)
     end
 
-    store_metrics(rest, measurements, metadata, data, tag_results)
+    defp build_batch(
+           [
+             Metric.handler_metric(
+               type: unquote(type),
+               id: id,
+               metric: metric,
+               keep: unquote(keep),
+               measurement: unquote(measurement),
+               tag_idx: tag_idx
+             )
+             | rest
+           ],
+           measurements,
+           metadata,
+           acc
+         ) do
+      acc =
+        if unquote(kept?) do
+          case unquote(value) do
+            value when is_number(value) -> [{id, metric, value, tag_idx} | acc]
+            _ -> acc
+          end
+        else
+          acc
+        end
+
+      build_batch(rest, measurements, metadata, acc)
+    end
   end
 
   defp keep?(keep, metadata, measurement) when is_function(keep, 2),

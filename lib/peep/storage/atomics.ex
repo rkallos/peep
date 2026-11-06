@@ -29,8 +29,8 @@ defmodule Peep.Storage.Atomics do
 
   defmacro insert(atomics_expr, value_expr) do
     quote do
-      {:atomic, num_buckets, buckets, sum, above_max, {module, config}}
-        = unquote(atomics_expr)
+      {:atomic, num_buckets, buckets, sum, above_max, {module, config}} =
+        unquote(atomics_expr)
 
       value = unquote(value_expr)
 
