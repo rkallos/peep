@@ -72,22 +72,20 @@ if Code.ensure_loaded?(Plug) do
           metrics_path: metrics_path,
           peep_worker: peep_worker
         }) do
-      metrics =
-        Peep.get_all_metrics(peep_worker)
-        |> Peep.Prometheus.export()
+      case Peep.get_all_metrics(peep_worker) do
+        nil ->
+          unavailable(conn)
 
-      conn
-      |> put_resp_content_type("text/plain")
-      |> send_resp(200, metrics)
-      |> halt()
+        metrics ->
+          conn
+          |> put_resp_content_type("text/plain")
+          |> send_resp(200, Peep.Prometheus.export(metrics))
+          |> halt()
+      end
     rescue
       error ->
         Logger.error(Exception.format(:error, error, __STACKTRACE__))
-
-        conn
-        |> put_resp_content_type("text/plain")
-        |> send_resp(503, "Service Unavailable")
-        |> halt()
+        unavailable(conn)
     end
 
     def call(%Conn{request_path: metrics_path} = conn, %{metrics_path: metrics_path}) do
@@ -105,6 +103,13 @@ if Code.ensure_loaded?(Plug) do
       conn
       |> put_resp_content_type("text/plain")
       |> send_resp(404, "Not Found")
+      |> halt()
+    end
+
+    defp unavailable(conn) do
+      conn
+      |> put_resp_content_type("text/plain")
+      |> send_resp(503, "Service Unavailable")
       |> halt()
     end
   end
