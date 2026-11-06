@@ -123,6 +123,7 @@ defmodule Peep.Storage.ETS do
   defp lookup_or_insert_atomics(tid, key, metric) do
     # shape: {key, atomics_ref}
     pos = 2
+
     case :ets.lookup_element(tid, key, pos, nil) do
       nil ->
         # Race condition: Multiple processes could be attempting

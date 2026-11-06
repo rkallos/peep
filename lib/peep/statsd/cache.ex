@@ -11,20 +11,21 @@ defmodule Peep.Statsd.Cache do
 
   def calculate_deltas(%__MODULE__{kv: kv_new}, %__MODULE__{kv: kv_old}) do
     for {key, value} <- kv_new, reduce: %{} do
-      acc ->
-        case key do
-          {:last_value, _name, _tags} ->
-            Map.put(acc, key, value)
+      acc -> maybe_put(acc, key, value, kv_old)
+    end
+  end
 
-          _ ->
-            delta = value - Map.get(kv_old, key, 0)
+  defp maybe_put(acc, {:last_value, _name, _tags} = key, value_new, _kv_old) do
+    Map.put(acc, key, value_new)
+  end
 
-            if delta != 0 do
-              Map.put(acc, key, delta)
-            else
-              acc
-            end
-        end
+  defp maybe_put(acc, key, value_new, kv_old) do
+    delta = value_new - Map.get(kv_old, key, 0)
+
+    if delta != 0 do
+      Map.put(acc, key, delta)
+    else
+      acc
     end
   end
 

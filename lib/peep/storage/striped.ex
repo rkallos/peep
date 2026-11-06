@@ -8,8 +8,8 @@ defmodule Peep.Storage.Striped do
 
   require Peep.Storage.Atomics
 
-  alias Telemetry.Metrics
   alias Peep.Storage
+  alias Telemetry.Metrics
 
   @behaviour Peep.Storage
 
@@ -169,6 +169,7 @@ defmodule Peep.Storage.Striped do
   defp lookup_or_insert_atomics(tid, key, metric) do
     # shape: {key, atomics_ref}
     pos = 2
+
     case :ets.lookup_element(tid, key, pos, nil) do
       nil ->
         # Race condition: Multiple processes could be attempting
