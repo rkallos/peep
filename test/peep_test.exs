@@ -166,6 +166,15 @@ defmodule PeepTest do
     assert_received {:keep, %{kept: true}, %{value: 99}}
   end
 
+  defp keep_metrics(event, keep) do
+    [
+      Metrics.counter("peep.counter", event_name: event, keep: keep),
+      Metrics.sum("peep.sum", event_name: event, measurement: :value, keep: keep),
+      Metrics.last_value("peep.gauge", event_name: event, measurement: :value, keep: keep),
+      Metrics.counter("peep.unfiltered", event_name: event)
+    ]
+  end
+
   test "tag keys absent from metadata are omitted" do
     [one_event, two_event] = [event(), event()]
     one = Metrics.counter("peep.one", event_name: one_event, tags: [:a])
@@ -201,15 +210,6 @@ defmodule PeepTest do
       ],
       exp_scrape: %{}
     )
-  end
-
-  defp keep_metrics(event, keep) do
-    [
-      Metrics.counter("peep.counter", event_name: event, keep: keep),
-      Metrics.sum("peep.sum", event_name: event, measurement: :value, keep: keep),
-      Metrics.last_value("peep.gauge", event_name: event, measurement: :value, keep: keep),
-      Metrics.counter("peep.unfiltered", event_name: event)
-    ]
   end
 
   defp check(opts) do
