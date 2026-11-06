@@ -3,23 +3,130 @@ defmodule StatsdTest do
 
   alias Peep.Statsd
   alias Peep.Statsd.Cache
+  alias Peep.Test.UDP
   alias Telemetry.Metrics
 
   test "a worker with statsd options sends its metrics over UDP" do
-    {:ok, socket} = :gen_udp.open(0, [:binary, active: true, ip: {127, 0, 0, 1}])
-    {:ok, port} = :inet.port(socket)
-    event = [Peep.Test.fresh_id()]
-    counter = Metrics.counter("statsd.test.counter", event_name: event)
+    event = event()
 
-    Peep.Test.start_peep!(
-      metrics: [counter],
-      statsd: [host: "127.0.0.1", port: port, flush_interval_ms: 10]
+    check_sent(
+      metrics: [Metrics.counter("statsd.test.counter", event_name: event)],
+      events: [{event, %{}, %{}}],
+      exp_packets: ["statsd.test.counter:1|c\n"]
+    )
+  end
+
+  test "the host can be an IP address tuple" do
+    event = event()
+
+    check_sent(
+      metrics: [Metrics.counter("statsd.test.counter", event_name: event)],
+      statsd: [host: {127, 0, 0, 1}],
+      events: [{event, %{}, %{}}],
+      exp_packets: ["statsd.test.counter:1|c\n"]
+    )
+  end
+
+  test "distributions can be sent in the datadog format" do
+    event = event()
+
+    dist =
+      Metrics.distribution("statsd.test.dist",
+        event_name: event,
+        measurement: :value,
+        reporter_options: [max_value: 100]
+      )
+
+    check_sent(
+      metrics: [dist],
+      statsd: [formatter: :datadog],
+      events: [{event, %{value: 50}, %{}}],
+      exp_packets: ["statsd.test.dist:55.335459|d|@1.0\n"]
+    )
+  end
+
+  test "a worker can send to a Unix domain socket" do
+    event = event()
+
+    check_sent(
+      unix_socket?: true,
+      metrics: [Metrics.counter("statsd.test.counter", event_name: event)],
+      events: [{event, %{}, %{}}],
+      exp_packets: ["statsd.test.counter:1|c\n"]
+    )
+  end
+
+  test "a packet that couldn't be sent for now is sent at the next flush" do
+    event = event()
+
+    check_sent(
+      fail: [send: [{:error, :eagain}]],
+      metrics: [Metrics.counter("statsd.test.counter", event_name: event)],
+      events: [{event, %{}, %{}}],
+      exp_packets: ["statsd.test.counter:1|c\n"],
+      exp_packet_errors: [:eagain]
+    )
+  end
+
+  test "a packet too large to send is split at the next flush" do
+    event = event()
+
+    check_sent(
+      fail: [send: [{:error, :emsgsize}]],
+      metrics: [
+        Metrics.counter("statsd.test.a", event_name: event),
+        Metrics.counter("statsd.test.b", event_name: event)
+      ],
+      events: [{event, %{}, %{}}],
+      exp_packets: ["statsd.test.a:1|c\n", "statsd.test.b:1|c\n"],
+      exp_packet_errors: [:emsgsize]
+    )
+  end
+
+  test "a packet that failed to send is resent at the next flush" do
+    event = event()
+
+    check_sent(
+      fail: [send: [{:error, :econnrefused}]],
+      metrics: [Metrics.counter("statsd.test.counter", event_name: event)],
+      events: [{event, %{}, %{}}],
+      exp_packets: ["statsd.test.counter:1|c\n"],
+      exp_packet_errors: [:econnrefused]
+    )
+  end
+
+  @tag capture_log: true
+  test "a socket that couldn't be opened is opened at the next flush" do
+    event = event()
+
+    check_sent(
+      fail: [open: [{:error, :emfile}]],
+      metrics: [Metrics.counter("statsd.test.counter", event_name: event)],
+      events: [{event, %{}, %{}}],
+      exp_packets: ["statsd.test.counter:1|c\n"]
+    )
+  end
+
+  test "invalid statsd options are rejected" do
+    check_rejected(
+      [host: :nope],
+      "invalid value for :host option: expected :host to be an IP address or a hostname, got :nope"
     )
 
-    :telemetry.execute(event, %{})
+    check_rejected(
+      [host: {999, 0, 0, 1}],
+      "invalid value for :host option: expected :host to be a valid IP address, got {999, 0, 0, 1}"
+    )
 
-    assert_receive {:udp, ^socket, _address, _port, "statsd.test.counter:1|c\n"}
-    refute_receive {:udp, ^socket, _address, _port, _packet}, 100
+    check_rejected(
+      [socket_path: 1],
+      "invalid value for :socket_path option: expected :socket_path to be a string, got 1"
+    )
+
+    check_rejected(
+      [formatter: :nope],
+      "invalid value for :formatter option: expected :formatter be either :standard or :datadog, got :nope"
+    )
   end
 
   test "a counter can be formatted" do
@@ -197,6 +304,82 @@ defmodule StatsdTest do
       scrape: %{counter => %{%{} => 10}},
       exp_lines: []
     )
+  end
+
+  def handle_packet_error(_event, _measurements, %{reason: reason}, pid) do
+    send(pid, {:packet_error, reason})
+  end
+
+  # Starts a reporter sending to a socket of its own, emits the events, and
+  # compares every packet received until the socket goes quiet.
+  defp check_sent(opts) do
+    for {fun, results} <- Keyword.get(opts, :fail, []), do: UDP.fail(fun, results)
+
+    handler_id = {__MODULE__, self()}
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        [:peep, :packet, :error],
+        &__MODULE__.handle_packet_error/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    {socket, statsd} = open_receiver(Keyword.get(opts, :unix_socket?, false))
+
+    Peep.Test.start_peep!(
+      metrics: Keyword.fetch!(opts, :metrics),
+      statsd: Keyword.merge(statsd ++ [flush_interval_ms: 10], Keyword.get(opts, :statsd, []))
+    )
+
+    for {event, measurements, metadata} <- Keyword.fetch!(opts, :events) do
+      :telemetry.execute(event, measurements, metadata)
+    end
+
+    assert Enum.sort(receive_packets(socket)) == Enum.sort(Keyword.fetch!(opts, :exp_packets))
+    assert receive_packet_errors() == Keyword.get(opts, :exp_packet_errors, [])
+  end
+
+  defp open_receiver(false = _unix_socket?) do
+    {:ok, socket} = :gen_udp.open(0, [:binary, active: true, ip: {127, 0, 0, 1}])
+    {:ok, port} = :inet.port(socket)
+    {socket, [host: "127.0.0.1", port: port]}
+  end
+
+  defp open_receiver(true = _unix_socket?) do
+    path = Path.join(System.tmp_dir!(), "peep-#{System.unique_integer([:positive])}.sock")
+    on_exit(fn -> File.rm(path) end)
+    {:ok, socket} = :gen_udp.open(0, [:binary, :local, active: true, ifaddr: {:local, path}])
+    {socket, [socket_path: path]}
+  end
+
+  defp receive_packets(socket) do
+    receive do
+      {:udp, ^socket, _address, _port, packet} -> [packet | receive_packets(socket)]
+    after
+      100 -> []
+    end
+  end
+
+  defp receive_packet_errors do
+    receive do
+      {:packet_error, reason} -> [reason | receive_packet_errors()]
+    after
+      0 -> []
+    end
+  end
+
+  defp event, do: [Peep.Test.fresh_id()]
+
+  defp check_rejected(statsd_opts, exp_reason) do
+    assert Peep.start_link(name: Peep.Test.fresh_id(), metrics: [], statsd: statsd_opts) ==
+             {:error,
+              "expected :statsd option to match at least one given type, but didn't match any. " <>
+                "Here are the reasons why it didn't match each of the allowed types:\n\n" <>
+                "  * #{exp_reason} (in options [:statsd])\n" <>
+                "  * invalid value for :statsd option: expected nil, got: #{inspect(statsd_opts)}"}
   end
 
   defp check(opts) do
