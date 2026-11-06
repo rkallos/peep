@@ -87,6 +87,39 @@ defmodule Peep.Storage.Test do
       assert Peep.Test.get_metric(all, last_value, odd: true) == 9
     end
 
+    test "#{inspect(impl)} - binary tag values round-trip byte-for-byte" do
+      counter = Metrics.counter("storage.test.counter", tags: [:t])
+      last_value = Metrics.last_value("storage.test.gauge", tags: [:t])
+
+      name =
+        Peep.Test.start_peep!(storage: unquote(impl), metrics: [counter, last_value])
+
+      # Erlang binaries are byte strings, not necessarily UTF-8, so a storage
+      # backend must not treat them as text - it has to hand back the exact
+      # bytes it was given.
+      utf8 = "héllo"
+      not_utf8 = <<0xFF, 0xFE>>
+
+      for tag_value <- [utf8, not_utf8] do
+        Peep.Test.insert_metric(name, counter, 1, %{t: tag_value})
+        Peep.Test.insert_metric(name, last_value, 7, %{t: tag_value})
+      end
+
+      all = Peep.get_all_metrics(name)
+
+      for metric <- [counter, last_value] do
+        # Asserting on the keys themselves, not only on lookups by them, so a
+        # backend that mangled the bytes can't pass by mangling both sides.
+        assert all |> Map.fetch!(metric) |> Map.keys() |> Enum.sort() ==
+                 Enum.sort([%{t: utf8}, %{t: not_utf8}])
+      end
+
+      for tag_value <- [utf8, not_utf8] do
+        assert Peep.Test.get_metric(all, counter, %{t: tag_value}) == 1
+        assert Peep.Test.get_metric(all, last_value, %{t: tag_value}) == 7
+      end
+    end
+
     test "#{inspect(impl)} - a distribution can be stored and retrieved" do
       dist =
         Metrics.distribution("storage.test.distribution", reporter_options: [max_value: 1000])

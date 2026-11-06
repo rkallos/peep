@@ -56,6 +56,7 @@ defmodule Peep.Buckets do
 
   @type config :: map
 
+  @callback boundaries(config) :: [number()]
   @callback config(Metrics.Distribution.t()) :: config
   @callback number_of_buckets(config) :: pos_integer
   @callback bucket_for(number, config) :: non_neg_integer

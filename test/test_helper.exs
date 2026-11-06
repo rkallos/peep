@@ -4,5 +4,5 @@ Application.put_env(:peep, :test_storages, [
   :default,
   :striped,
   {CustomStorage, 3},
-  {CustomBatchedStorage, 3}
+  {CustomBatchedStorage, []}
 ])

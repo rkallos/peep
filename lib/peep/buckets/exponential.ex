@@ -17,6 +17,20 @@ defmodule Peep.Buckets.Exponential do
 
   alias Telemetry.Metrics
 
+  # bucket_for/2's bounds are inclusive, so each is stepped up one float to make it exclusive.
+  @impl true
+  def boundaries(%{gamma: gamma} = config) do
+    for i <- 0..(number_of_buckets(config) - 1) do
+      next_up(:math.pow(gamma, i))
+    end
+  end
+
+  defp next_up(x) when is_float(x) and x > 0.0 do
+    <<bits::unsigned-integer-64>> = <<x::float-64>>
+    <<next::float-64>> = <<bits + 1::unsigned-integer-64>>
+    next
+  end
+
   @impl true
   def config(%Metrics.Distribution{reporter_options: opts}) do
     max_value =
