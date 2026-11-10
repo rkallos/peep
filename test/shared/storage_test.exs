@@ -47,6 +47,18 @@ defmodule Peep.Storage.Test do
       )
     end
 
+    test "#{inspect(impl)} - metrics of one event are stored under their own tags" do
+      event = event()
+      by_a = Metrics.counter("storage.test.by_a", event_name: event, tags: [:a])
+      by_b = Metrics.counter("storage.test.by_b", event_name: event, tags: [:b])
+
+      check(unquote(impl),
+        metrics: [by_a, by_b],
+        events: [{event, %{}, %{a: 1, b: 2}}],
+        exp_scrape: %{by_a => %{%{a: 1} => 1}, by_b => %{%{b: 2} => 1}}
+      )
+    end
+
     test "#{inspect(impl)} - a last_value keeps its last measurement per tags map" do
       event = event()
 
