@@ -79,11 +79,9 @@ defmodule PeepTest do
         Metrics.summary("peep.summary", event_name: event_one),
         Metrics.summary("another.peep.summary", event_name: event_two)
       ],
-      exp_scrape: %{}
+      exp_scrape: %{},
+      exp_no_handlers: [event_one, event_two]
     )
-
-    assert :telemetry.list_handlers(event_one) == []
-    assert :telemetry.list_handlers(event_two) == []
   end
 
   test "Handlers are detached on shutdown" do
@@ -282,6 +280,7 @@ defmodule PeepTest do
   defp check(opts) do
     name =
       Peep.Test.start_peep!(
+        storage: Keyword.get(opts, :storage, :default),
         metrics: Keyword.fetch!(opts, :metrics),
         global_tags: Keyword.get(opts, :global_tags, %{})
       )
@@ -291,6 +290,10 @@ defmodule PeepTest do
     end
 
     assert Peep.get_all_metrics(name) == Keyword.fetch!(opts, :exp_scrape)
+
+    for event <- Keyword.get(opts, :exp_no_handlers, []) do
+      assert :telemetry.list_handlers(event) == []
+    end
   end
 
   defp event, do: [Peep.Test.fresh_id()]
