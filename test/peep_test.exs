@@ -256,6 +256,17 @@ defmodule PeepTest do
     )
   end
 
+  test "a metric given twice is recorded once" do
+    event = event()
+    sum = Metrics.sum("peep.sum", event_name: event, measurement: :value)
+
+    check(
+      metrics: [sum, sum],
+      events: [{event, %{value: 5}, %{}}],
+      exp_scrape: %{sum => %{%{} => 5}}
+    )
+  end
+
   test "a storage module that can't be loaded is rejected" do
     assert_raise ArgumentError, "storage module NotAModule could not be loaded", fn ->
       Peep.Storage.insert_shape(NotAModule)
