@@ -96,9 +96,9 @@ defmodule PlugTest do
       metrics = [last_value("vm.memory.total", unit: :byte)]
       _peep = start_supervised!({Peep, name: name, metrics: metrics})
       plug = {Peep.Plug, peep_worker: name}
-      port = 9001
 
-      {:ok, _pid} = start_supervised({Bandit, plug: plug, port: port, startup_log: false})
+      bandit = start_supervised!({Bandit, plug: plug, port: 0, startup_log: false})
+      {:ok, {_address, port}} = ThousandIsland.listener_info(bandit)
 
       assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _headers, ~c"# EOF\n"}} =
                :httpc.request("http://localhost:#{port}/metrics")
@@ -109,10 +109,10 @@ defmodule PlugTest do
       metrics = [last_value("vm.memory.total", unit: :byte)]
       _peep = start_supervised!({Peep, name: name, metrics: metrics})
       plug = {Peep.Plug, peep_worker: name}
-      port = 9002
 
-      {:ok, _pid} =
-        start_supervised({Plug.Cowboy, scheme: :http, plug: plug, options: [port: port]})
+      start_supervised!({Plug.Cowboy, scheme: :http, plug: plug, options: [port: 0, ref: name]})
+
+      port = :ranch.get_port(name)
 
       assert {:ok, {{~c"HTTP/1.1", 200, ~c"OK"}, _headers, ~c"# EOF\n"}} =
                :httpc.request("http://localhost:#{port}/metrics")
