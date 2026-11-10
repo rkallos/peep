@@ -9,6 +9,12 @@ defmodule PrometheusTest do
     defstruct [:reason, :code]
   end
 
+  defmodule NanosecondBuckets do
+    use Peep.Buckets.Custom, buckets: [5_000, 50_000, 500_000]
+  end
+
+  @kilo [peep_export_conversion_factor: 0.001]
+
   test "an empty scrape exports nothing but EOF" do
     check(scrape: %{}, exp_export: [])
   end
@@ -274,6 +280,96 @@ defmodule PrometheusTest do
         ~S(prometheus_test_counter{path="a\\b"} 1)
       ]
     )
+  end
+
+  describe "peep_export_conversion_factor" do
+    test "converts a sum" do
+      sum = Metrics.sum("prometheus.test.sum", reporter_options: @kilo)
+
+      check(
+        scrape: %{sum => %{%{} => 3000}},
+        exp_export: [
+          "# HELP prometheus_test_sum ",
+          "# TYPE prometheus_test_sum counter",
+          "prometheus_test_sum 3.0"
+        ]
+      )
+    end
+
+    test "converts a last_value" do
+      last_value = Metrics.last_value("prometheus.test.gauge", reporter_options: @kilo)
+
+      check(
+        scrape: %{last_value => %{%{foo: :bar} => 1500}},
+        exp_export: [
+          "# HELP prometheus_test_gauge ",
+          "# TYPE prometheus_test_gauge gauge",
+          ~s(prometheus_test_gauge{foo="bar"} 1.5)
+        ]
+      )
+    end
+
+    test "converts a distribution's sum and bucket bounds" do
+      dist = Metrics.distribution("prometheus.test.dist", reporter_options: @kilo)
+
+      check(
+        scrape: %{dist => %{%{} => %{"1000.0" => 1, "2000.0" => 2, infinity: 1, sum: 7500}}},
+        exp_export: [
+          "# HELP prometheus_test_dist ",
+          "# TYPE prometheus_test_dist histogram",
+          ~s(prometheus_test_dist_bucket{le="1.0"} 1),
+          ~s(prometheus_test_dist_bucket{le="2.0"} 3),
+          ~s(prometheus_test_dist_bucket{le="+Inf"} 4),
+          "prometheus_test_dist_sum 7.5",
+          "prometheus_test_dist_count 4"
+        ]
+      )
+    end
+
+    test "does not convert a counter" do
+      counter = Metrics.counter("prometheus.test.counter", reporter_options: @kilo)
+
+      check(
+        scrape: %{counter => %{%{} => 3000}},
+        exp_export: [
+          "# HELP prometheus_test_counter ",
+          "# TYPE prometheus_test_counter counter",
+          "prometheus_test_counter 3000"
+        ]
+      )
+    end
+
+    test "regression: a distribution of nanoseconds has a sum in seconds" do
+      event = [Peep.Test.fresh_id()]
+
+      dist =
+        Metrics.distribution("prometheus.test.duration",
+          event_name: event,
+          measurement: :duration,
+          unit: :nanosecond,
+          reporter_options: [
+            peep_bucket_calculator: NanosecondBuckets,
+            peep_export_conversion_factor: 1.0e-9
+          ]
+        )
+
+      name = Peep.Test.start_peep!(metrics: [dist])
+      for duration <- [2_000, 4_000, 42_312], do: :telemetry.execute(event, %{duration: duration})
+
+      check(
+        scrape: Peep.get_all_metrics(name),
+        exp_export: [
+          "# HELP prometheus_test_duration ",
+          "# TYPE prometheus_test_duration histogram",
+          ~s(prometheus_test_duration_bucket{le="5.0e-6"} 2),
+          ~s(prometheus_test_duration_bucket{le="5.0e-5"} 3),
+          ~s(prometheus_test_duration_bucket{le="0.0005"} 3),
+          ~s(prometheus_test_duration_bucket{le="+Inf"} 3),
+          "prometheus_test_duration_sum 4.8312e-5",
+          "prometheus_test_duration_count 3"
+        ]
+      )
+    end
   end
 
   test "regression: label escaping" do

@@ -6,6 +6,8 @@ defmodule StatsdTest do
   alias Peep.Test.UDP
   alias Telemetry.Metrics
 
+  @kilo [peep_export_conversion_factor: 0.001]
+
   test "a worker with statsd options sends its metrics over UDP" do
     event = event()
 
@@ -293,6 +295,45 @@ defmodule StatsdTest do
         "statsd.test.dist:1122.680424|d|@1.0|#foo:bar"
       ]
     )
+  end
+
+  describe "peep_export_conversion_factor" do
+    test "converts what was added to a sum since the last flush" do
+      sum = Metrics.sum("statsd.test.sum", reporter_options: @kilo)
+
+      check(
+        prev_scrape: %{sum => %{%{} => 1000}},
+        scrape: %{sum => %{%{} => 4500}},
+        exp_lines: ["statsd.test.sum:3.5|c"]
+      )
+    end
+
+    test "converts a last_value" do
+      last_value = Metrics.last_value("statsd.test.gauge", reporter_options: @kilo)
+
+      check(
+        scrape: %{last_value => %{%{} => 1500}},
+        exp_lines: ["statsd.test.gauge:1.5|g"]
+      )
+    end
+
+    test "converts a distribution's bucket bounds" do
+      dist = Metrics.distribution("statsd.test.dist", reporter_options: @kilo)
+
+      check(
+        scrape: %{dist => %{%{} => %{"1000.0" => 1, "2000.0" => 2, infinity: 1, sum: 7500}}},
+        exp_lines: ["statsd.test.dist:1.0|ms|@1.0", "statsd.test.dist:2.0|ms|@0.5"]
+      )
+    end
+
+    test "does not convert a counter" do
+      counter = Metrics.counter("statsd.test.counter", reporter_options: @kilo)
+
+      check(
+        scrape: %{counter => %{%{} => 3000}},
+        exp_lines: ["statsd.test.counter:3000|c"]
+      )
+    end
   end
 
   test "above-max distribution samples are excluded from output" do

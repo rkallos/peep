@@ -66,6 +66,22 @@ defmodule Peep do
     option to define Prometheus' type used by such metric. By default `sum/2`
     uses `counter` and `last_value/2` uses `gauge`. It can be useful when some
     values are already precomputed, for example presummed socket stats.
+  - `:peep_export_conversion_factor` - a positive number that the values of a `sum/2`,
+    `last_value/2` or `distribution/2` are multiplied by when they are exported
+    to Prometheus or StatsD. For a distribution, those are its sum and the
+    bounds of its buckets. `get_all_metrics/1` returns the values as they are
+    stored. For example, to bucket durations by the nanosecond and report them
+    in seconds:
+
+        distribution("http.request.duration",
+          unit: :nanosecond,
+          reporter_options: [
+            max_value: 60_000_000_000,
+            peep_export_conversion_factor: 1.0e-9
+          ]
+        )
+
+    A metric whose factor isn't a positive number is dropped with a warning.
   """
   use GenServer
 
@@ -183,27 +199,42 @@ defmodule Peep do
     false
   end
 
-  def allow_metric?(%Telemetry.Metrics.Distribution{reporter_options: opts} = metric) do
-    key = :max_value
+  def allow_metric?(%Telemetry.Metrics.Distribution{} = metric) do
+    valid_option?(metric, :max_value, &is_number/1, "a number") and
+      valid_conversion_factor?(metric)
+  end
 
-    case Keyword.get(opts, key) do
-      nil ->
+  def allow_metric?(%Telemetry.Metrics.Counter{}) do
+    true
+  end
+
+  def allow_metric?(metric) do
+    valid_conversion_factor?(metric)
+  end
+
+  defp valid_conversion_factor?(metric) do
+    valid_option?(
+      metric,
+      :peep_export_conversion_factor,
+      &(is_number(&1) and &1 > 0),
+      "a positive number"
+    )
+  end
+
+  defp valid_option?(%{name: name, reporter_options: opts}, key, valid?, expected) do
+    value = Keyword.get(opts, key)
+
+    case is_nil(value) or valid?.(value) do
+      true ->
         true
 
-      n when is_number(n) ->
-        true
-
-      _ ->
+      false ->
         Logger.warning(
-          "Distributions must have a numeric value assigned to #{inspect(key)} in reporter_options. Dropping #{inspect(metric.name)}"
+          "#{inspect(key)} in reporter_options must be #{expected}. Dropping #{inspect(name)}"
         )
 
         false
     end
-  end
-
-  def allow_metric?(_) do
-    true
   end
 
   # callbacks

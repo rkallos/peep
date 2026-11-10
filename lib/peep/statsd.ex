@@ -2,6 +2,7 @@ defmodule Peep.Statsd do
   @moduledoc false
   require Logger
 
+  alias Peep.Conversion
   alias Peep.Statsd.{Cache, Packet}
   alias Peep.Telemetry
 
@@ -104,12 +105,12 @@ defmodule Peep.Statsd do
     [name, ?:, n2b(count), "|c", tags]
   end
 
-  defp format_line({:last_value, name, tags}, value, _formatter) do
-    [name, ?:, n2b(value), "|g", tags]
+  defp format_line({:last_value, name, tags, factor}, value, _formatter) do
+    [name, ?:, converted(value, factor), "|g", tags]
   end
 
-  defp format_line({:sum, name, tags}, sum, _formatter) do
-    [name, ?:, n2b(sum), "|c", tags]
+  defp format_line({:sum, name, tags, factor}, sum, _formatter) do
+    [name, ?:, converted(sum, factor), "|c", tags]
   end
 
   defp format_line({:dist, name, tags, bucket}, count, formatter) do
@@ -121,6 +122,9 @@ defmodule Peep.Statsd do
 
     [name, ?:, to_string(bucket), ?|, type_bytes, "|@", f2b(1.0 / count), tags]
   end
+
+  defp converted(value, 1), do: n2b(value)
+  defp converted(value, factor), do: value |> Conversion.convert(factor) |> to_string()
 
   defp f2b(f), do: :erlang.float_to_binary(f, [:compact, {:decimals, 6}])
   defp n2b(n) when is_integer(n), do: :erlang.integer_to_binary(n)

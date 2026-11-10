@@ -84,6 +84,25 @@ defmodule PeepTest do
     )
   end
 
+  @tag capture_log: true
+  test "metrics with an invalid export conversion factor are dropped" do
+    [event_one, event_two, event_three] = [event(), event(), event()]
+    factor = &[reporter_options: [peep_export_conversion_factor: &1]]
+    kept = Metrics.counter("peep.counter", [event_name: event_three] ++ factor.(:ignored))
+
+    check(
+      metrics: [
+        Metrics.sum("peep.sum", [event_name: event_one] ++ factor.("1000")),
+        Metrics.last_value("peep.gauge", [event_name: event_one] ++ factor.(0)),
+        Metrics.distribution("peep.dist", [event_name: event_two] ++ factor.(-0.001)),
+        kept
+      ],
+      events: [{event_one, %{}, %{}}, {event_two, %{}, %{}}, {event_three, %{}, %{}}],
+      exp_scrape: %{kept => %{%{} => 1}},
+      exp_no_handlers: [event_one, event_two]
+    )
+  end
+
   test "Handlers are detached on shutdown" do
     prefix = [:"#{__MODULE__}_shutdown_test"]
 

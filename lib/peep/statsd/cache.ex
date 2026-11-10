@@ -1,5 +1,6 @@
 defmodule Peep.Statsd.Cache do
   @moduledoc false
+  alias Peep.Conversion
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum}
 
   defstruct kv: %{}
@@ -15,7 +16,7 @@ defmodule Peep.Statsd.Cache do
     end
   end
 
-  defp maybe_put(acc, {:last_value, _name, _tags} = key, value_new, _kv_old) do
+  defp maybe_put(acc, {:last_value, _name, _tags, _factor} = key, value_new, _kv_old) do
     Map.put(acc, key, value_new)
   end
 
@@ -56,32 +57,35 @@ defmodule Peep.Statsd.Cache do
     %{cache | kv: new_kv}
   end
 
-  defp add(%__MODULE__{kv: kv} = cache, {%LastValue{name: name}, tagged_series}) do
+  defp add(%__MODULE__{kv: kv} = cache, {%LastValue{name: name} = metric, tagged_series}) do
     formatted_name = format_name(name)
+    factor = Conversion.factor(metric)
 
     new_kv =
       for {tags, value} <- tagged_series, into: kv do
         formatted_tags = format_tags(tags)
-        {{:last_value, formatted_name, formatted_tags}, value}
+        {{:last_value, formatted_name, formatted_tags, factor}, value}
       end
 
     %{cache | kv: new_kv}
   end
 
-  defp add(%__MODULE__{kv: kv} = cache, {%Sum{name: name}, tagged_series}) do
+  defp add(%__MODULE__{kv: kv} = cache, {%Sum{name: name} = metric, tagged_series}) do
     formatted_name = format_name(name)
+    factor = Conversion.factor(metric)
 
     new_kv =
       for {tags, sum} <- tagged_series, into: kv do
         formatted_tags = format_tags(tags)
-        {{:sum, formatted_name, formatted_tags}, sum}
+        {{:sum, formatted_name, formatted_tags, factor}, sum}
       end
 
     %{cache | kv: new_kv}
   end
 
-  defp add(%__MODULE__{kv: kv} = cache, {%Distribution{name: name}, tagged_series}) do
+  defp add(%__MODULE__{kv: kv} = cache, {%Distribution{name: name} = metric, tagged_series}) do
     formatted_name = format_name(name)
+    factor = Conversion.factor(metric)
 
     new_kv =
       for {tags, buckets} <- tagged_series, reduce: kv do
@@ -90,7 +94,7 @@ defmodule Peep.Statsd.Cache do
 
           to_add =
             for {bucket, count} <- buckets, bucket != :sum, bucket != :infinity, into: %{} do
-              formatted_bucket = to_string(bucket)
+              formatted_bucket = format_bucket(bucket, factor)
               {{:dist, formatted_name, formatted_tags, formatted_bucket}, count}
             end
 
@@ -98,6 +102,15 @@ defmodule Peep.Statsd.Cache do
       end
 
     %{cache | kv: new_kv}
+  end
+
+  defp format_bucket(bucket, 1), do: to_string(bucket)
+
+  defp format_bucket(bucket, factor) do
+    bucket
+    |> String.to_float()
+    |> Conversion.convert(factor)
+    |> Float.to_string()
   end
 
   defp format_name(segments) do
