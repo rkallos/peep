@@ -9,6 +9,7 @@ defmodule BucketsTest do
     use Peep.Buckets.Custom, buckets: Enum.map(1..20, &(&1 * 10))
   end
 
+  alias Peep.Buckets.Exponential
   alias Telemetry.Metrics
 
   test "custom buckets #1" do
@@ -136,6 +137,32 @@ defmodule BucketsTest do
 
     assert module.number_of_buckets(%{}) == 3
     check(module, exp_buckets: %{0 => 0, 1 => 1, 2 => 2, 3 => 3})
+  end
+
+  test "each exponential boundary is the smallest float above its bucket" do
+    for opts <- [
+          [],
+          [max_value: 1000],
+          [bucket_variability: 0.25],
+          [max_value: 1.0e12, bucket_variability: 0.01]
+        ] do
+      dist = Metrics.distribution("buckets.test.exponential", reporter_options: opts)
+      config = Exponential.config(dist)
+      boundaries = Exponential.boundaries(config)
+
+      assert length(boundaries) == Exponential.number_of_buckets(config)
+
+      for {boundary, idx} <- Enum.with_index(boundaries) do
+        assert Exponential.bucket_for(boundary, config) == idx + 1
+        assert Exponential.bucket_for(float_below(boundary), config) == idx
+      end
+    end
+  end
+
+  defp float_below(x) do
+    <<bits::unsigned-integer-64>> = <<x::float-64>>
+    <<below::float-64>> = <<bits - 1::unsigned-integer-64>>
+    below
   end
 
   defp check(mod, opts) do
