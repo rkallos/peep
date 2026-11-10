@@ -121,6 +121,17 @@ defmodule Peep do
   end
 
   @doc """
+  Sends StatsD metrics now, without waiting for the next flush interval.
+
+  Returns `:ok` once the packets are sent. Does nothing if the worker has no
+  `:statsd` options.
+  """
+  @spec statsd_flush(GenServer.server()) :: :ok
+  def statsd_flush(peep) do
+    GenServer.call(peep, :statsd_flush)
+  end
+
+  @doc """
   Fetches all metrics from the worker. Called when preparing Prometheus or
   StatsD data.
   """
@@ -229,20 +240,19 @@ defmodule Peep do
   end
 
   @impl true
+  def handle_call(:statsd_flush, _from, state) do
+    {:reply, :ok, flush_statsd(state)}
+  end
+
+  @impl true
   def handle_info(:statsd_flush, %State{statsd_state: nil} = state) do
     {:noreply, state}
   end
 
-  def handle_info(
-        :statsd_flush,
-        %State{name: name, statsd_state: statsd_state, statsd_opts: statsd_opts} = state
-      ) do
-    new_statsd_state =
-      Peep.get_all_metrics(name)
-      |> Statsd.make_and_send_packets(statsd_state)
-
+  def handle_info(:statsd_flush, %State{statsd_opts: statsd_opts} = state) do
+    new_state = flush_statsd(state)
     set_statsd_timer(statsd_opts[:flush_interval_ms])
-    {:noreply, %State{state | statsd_state: new_statsd_state}}
+    {:noreply, new_state}
   end
 
   def handle_info(_msg, state) do
@@ -262,6 +272,16 @@ defmodule Peep do
   end
 
   # private
+
+  defp flush_statsd(%State{statsd_state: nil} = state), do: state
+
+  defp flush_statsd(%State{name: name, statsd_state: statsd_state} = state) do
+    new_statsd_state =
+      Peep.get_all_metrics(name)
+      |> Statsd.make_and_send_packets(statsd_state)
+
+    %State{state | statsd_state: new_statsd_state}
+  end
 
   defp set_statsd_timer(interval) do
     Process.send_after(self(), :statsd_flush, interval)
