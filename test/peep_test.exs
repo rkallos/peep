@@ -229,6 +229,22 @@ defmodule PeepTest do
     )
   end
 
+  for storage <- [:default, :striped] do
+    @tag capture_log: true
+    test "the #{storage} storage can't add a float to a sum" do
+      event = event()
+      sum = Metrics.sum("peep.sum", event_name: event, measurement: :value)
+
+      check(
+        storage: unquote(storage),
+        metrics: [sum],
+        events: for(value <- [1, 1.5, 1], do: {event, %{value: value}, %{}}),
+        exp_scrape: %{sum => %{%{} => 1}},
+        exp_no_handlers: [event]
+      )
+    end
+  end
+
   test "a measurement can be computed from the event's measurements" do
     event = event()
     sum = Metrics.sum("peep.sum", event_name: event, measurement: &(&1.a + &1.b))

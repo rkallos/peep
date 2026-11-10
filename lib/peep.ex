@@ -82,6 +82,10 @@ defmodule Peep do
         )
 
     A metric whose factor isn't a positive number is dropped with a warning.
+
+    The storages that come with Peep add only integers to a sum. With them, a
+    `:unit` conversion that gives a float, such as `{:byte, :kilobyte}`, makes a
+    sum's handler raise, and `:telemetry` detaches it. Use this option instead.
   """
   use GenServer
 

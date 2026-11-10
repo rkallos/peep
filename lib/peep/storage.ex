@@ -108,6 +108,14 @@ defmodule Peep.Storage do
   end
 
   @doc false
+  def float_sum!(storage_mod, %Metrics.Sum{name: name}, value) do
+    raise ArgumentError,
+          "#{inspect(storage_mod)} can't add the float #{value} to the sum #{inspect(name)}: " <>
+            "it adds only integers to a sum. To report a sum in another unit, set " <>
+            ":peep_export_conversion_factor in its :reporter_options instead of converting with :unit"
+  end
+
+  @doc false
   @spec registers_metrics?(module()) :: boolean()
   def registers_metrics?(storage_mod) do
     Code.ensure_loaded?(storage_mod) and function_exported?(storage_mod, :register_metrics, 2)
