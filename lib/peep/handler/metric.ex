@@ -1,36 +1,35 @@
 defmodule Peep.Handler.Metric do
-  @moduledoc """
-  A pre-compiled representation of a single metric within a telemetry handler.
-
-  Each record captures everything needed to store a sample in the hot path:
-
-    * `type` — `:counter` or `:other`. Counters are special-cased: they always
-      store value `1` and skip measurement lookup entirely.
-
-    * `insert_fn` — a closure over `storage_mod`, metric id, and the metric
-      struct. Calling `insert_fn.(resolved_storage, value, tags)` writes
-      directly to the storage backend, avoiding repeated map/struct lookups
-      on every event. Used by backends implementing
-      `c:Peep.Storage.insert_metric/5`.
-
-    * `id` and `metric` — the same metric id and struct, carried separately for
-      backends implementing `c:Peep.Storage.insert_metrics/3`, which receive
-      them as part of a batch item rather than through a closure.
-
-    * `keep` — the keep filter, or `:no_keep` when absent. Splitting `:no_keep`
-      from function-valued keeps lets `store_metrics` clause-match into four
-      fast paths (counter/other × keep/no_keep).
-
-    * `measurement` — the measurement key, or a 1-/2-arity function. Stored
-      verbatim from the metric struct so `fetch_measurement` can extract the
-      value from the measurements map without re-traversing the metric.
-
-    * `tag_idx` — index into the pre-computed tag results tuple. Metrics that
-      share the same `tags`/`tag_values` configuration share a single tag
-      function (deduplicated during `Peep.Handler.Config.new/3`), and `tag_idx`
-      points to the result of that shared function, avoiding redundant tag
-      computation per event.
-  """
+  # A pre-compiled representation of a single metric within a telemetry handler.
+  #
+  # Each record captures everything needed to store a sample in the hot path:
+  #
+  #   * `type` — `:counter` or `:other`. Counters are special-cased: they always
+  #     store value `1` and skip measurement lookup entirely.
+  #
+  #   * `insert_fn` — a closure over `storage_mod`, metric id, and the metric
+  #     struct. Calling `insert_fn.(resolved_storage, value, tags)` writes
+  #     directly to the storage backend, avoiding repeated map/struct lookups
+  #     on every event. Used by backends implementing
+  #     `c:Peep.Storage.insert_metric/5`.
+  #
+  #   * `id` and `metric` — the same metric id and struct, carried separately for
+  #     backends implementing `c:Peep.Storage.insert_metrics/3`, which receive
+  #     them as part of a batch item rather than through a closure.
+  #
+  #   * `keep` — the keep filter, or `:no_keep` when absent. Splitting `:no_keep`
+  #     from function-valued keeps lets `store_metrics` clause-match into four
+  #     fast paths (counter/other × keep/no_keep).
+  #
+  #   * `measurement` — the measurement key, or a 1-/2-arity function. Stored
+  #     verbatim from the metric struct so `fetch_measurement` can extract the
+  #     value from the measurements map without re-traversing the metric.
+  #
+  #   * `tag_idx` — index into the pre-computed tag results tuple. Metrics that
+  #     share the same `tags`/`tag_values` configuration share a single tag
+  #     function (deduplicated during `Peep.Handler.Config.new/3`), and `tag_idx`
+  #     points to the result of that shared function, avoiding redundant tag
+  #     computation per event.
+  @moduledoc false
 
   require Record
 

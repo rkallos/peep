@@ -1,25 +1,24 @@
 defmodule Peep.Handler.Config do
-  @moduledoc """
-  The configuration attached to a telemetry handler via `:telemetry.attach/4`.
-
-  Built once per event during `Peep.EventHandler.attach/1`, compiling raw
-  Telemetry.Metrics definitions into an optimized form:
-
-    * `metrics` — a list of `Peep.Handler.Metric` records, one per metric
-      definition attached to this event.
-
-    * `storage_mod` — the `Peep.Storage` implementation module. Passed to Stored
-      here so `Peep.EventHandler.handle_event/4` can call
-      `storage_mod.resolve/1` once per event rather than once per metric.
-
-    * `storage` — the storage state term (e.g. an ETS table id). Passed to
-      `storage_mod.resolve/1` to get the resolved handle for the current
-      scheduler.
-
-    * `tag_fns` — a tuple of tag-computing functions, deduplicated across
-      metrics that share the same `tags`/`tag_values` configuration. Evaluated
-      once per event; each metric accesses its result in O(1) by `tag_idx`.
-  """
+  # The configuration attached to a telemetry handler via `:telemetry.attach/4`.
+  #
+  # Built once per event during `Peep.EventHandler.attach/1`, compiling raw
+  # Telemetry.Metrics definitions into an optimized form:
+  #
+  #   * `metrics` — a list of `Peep.Handler.Metric` records, one per metric
+  #     definition attached to this event.
+  #
+  #   * `storage_mod` — the `Peep.Storage` implementation module. Passed to Stored
+  #     here so `Peep.EventHandler.handle_event/4` can call
+  #     `storage_mod.resolve/1` once per event rather than once per metric.
+  #
+  #   * `storage` — the storage state term (e.g. an ETS table id). Passed to
+  #     `storage_mod.resolve/1` to get the resolved handle for the current
+  #     scheduler.
+  #
+  #   * `tag_fns` — a tuple of tag-computing functions, deduplicated across
+  #     metrics that share the same `tags`/`tag_values` configuration. Evaluated
+  #     once per event; each metric accesses its result in O(1) by `tag_idx`.
+  @moduledoc false
 
   require Record
 

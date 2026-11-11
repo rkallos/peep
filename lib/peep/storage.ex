@@ -19,6 +19,9 @@ defmodule Peep.Storage do
   """
   alias Telemetry.Metrics
 
+  @typep persistent() :: Peep.Persistent.t()
+  @typep ids_to_metrics() :: Peep.Persistent.ids_to_metrics()
+
   @doc """
   Creates a new term representing a Peep storage backend.
   """
@@ -56,7 +59,7 @@ defmodule Peep.Storage do
   @doc """
   Retrieves all stored metrics
   """
-  @callback get_all_metrics(term(), Peep.Persistent.t()) :: map()
+  @callback get_all_metrics(term(), persistent()) :: map()
 
   @doc """
   Removes metrics whose metadata contains a specific tag key and value.
@@ -66,17 +69,14 @@ defmodule Peep.Storage do
   @callback prune_tags(term(), [%{Metrics.tag() => term()}]) :: :ok
 
   @doc """
-  Called once when Peep starts, so a backend can get what it needs to know
-  about Peep's metrics up front instead of calling into Peep while handling
-  telemetry events.
+  Called once when Peep starts to inform a backend about Peep's metrics.
 
-  Each distribution carries `:peep_buckets`: `{upper_bound, label}` pairs sorted
-  by bound, with no repeated bound or label. Bounds are exclusive floats; a
-  sample at or above the last one belongs in the `:infinity` bucket.
+  Each distribution carries `:peep_buckets`: unique `{upper_bound, label}`
+  pairs sorted by upper bound (which is always a float).
   """
   @callback register_metrics(
               storage :: term(),
-              ids_to_metrics :: Peep.Persistent.ids_to_metrics()
+              ids_to_metrics :: ids_to_metrics()
             ) :: :ok
 
   @doc """

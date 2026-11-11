@@ -62,30 +62,35 @@ defmodule Peep do
 
   ## Supported `:reporter_options`
 
-  - `:prometheus_type` - when using `sum/2` or `last_value/2` you can use this
-    option to define Prometheus' type used by such metric. By default `sum/2`
-    uses `counter` and `last_value/2` uses `gauge`. It can be useful when some
-    values are already precomputed, for example presummed socket stats.
-  - `:peep_export_conversion_factor` - a positive number that the values of a `sum/2`,
-    `last_value/2` or `distribution/2` are multiplied by when they are exported
-    to Prometheus or StatsD. For a distribution, those are its sum and the
-    bounds of its buckets. `get_all_metrics/1` returns the values as they are
-    stored. For example, to bucket durations by the nanosecond and report them
-    in seconds:
+  ### `:prometheus_type`
 
-        distribution("http.request.duration",
-          unit: :nanosecond,
-          reporter_options: [
-            max_value: 60_000_000_000,
-            peep_export_conversion_factor: 1.0e-9
-          ]
-        )
+  When using `Telemetry.Metrics.sum/2` or `Telemetry.Metrics.last_value/2`, you
+  can use this option to define the Prometheus type used by the metric. By
+  default, `sum/2` uses `counter` and `last_value/2` uses `gauge`. It can be
+  useful when some values are already precomputed, for example presummed
+  socket stats.
 
-    A metric whose factor isn't a positive number is dropped with a warning.
+  ### `:peep_export_conversion_factor`
 
-    The storages that come with Peep add only integers to a sum. With them, a
-    `:unit` conversion that gives a float, such as `{:byte, :kilobyte}`, makes a
-    sum's handler raise, and `:telemetry` detaches it. Use this option instead.
+  A positive number that scales the values of a `Telemetry.Metrics.sum/2`,
+  `Telemetry.Metrics.last_value/2` or `Telemetry.Metrics.distribution/2` when
+  they are exported.
+
+  For example, to store durations as nanoseconds and report them as seconds:
+
+      distribution("http.request.duration",
+        unit: :nanosecond,
+        reporter_options: [
+          max_value: 60_000_000_000,
+          peep_export_conversion_factor: 1.0e-9
+        ]
+      )
+
+  Note: Unlike this option, setting [`:unit`](`m:Telemetry.Metrics#module-converting-units`)
+  in a `Telemetry.Metrics` struct does affect Peep's storage of distributions.
+  The recommendation is to store distribution sample measurements in a
+  granularity fine enough to spread most of the distribution over several
+  buckets, then to set `:peep_export_conversion_factor`.
   """
   use GenServer
 
