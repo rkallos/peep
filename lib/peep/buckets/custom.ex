@@ -51,12 +51,15 @@ defmodule Peep.Buckets.Custom do
 
         def bucket_for(_, _), do: unquote(len)
       else
-        # For larger lists binary search still wins
+        # For larger lists binary search still wins. Aliasing Peep.Buckets.Custom here
+        # would define the alias in the module that uses this one.
         def bucket_for(val, _) when is_integer(val) do
+          # credo:disable-for-next-line Credo.Check.Design.AliasUsage
           Peep.Buckets.Custom.build_tree(unquote(int_buckets), unquote(len), val)
         end
 
         def bucket_for(val, _) when is_float(val) do
+          # credo:disable-for-next-line Credo.Check.Design.AliasUsage
           Peep.Buckets.Custom.build_tree(unquote(float_buckets), unquote(len), val)
         end
       end

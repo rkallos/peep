@@ -78,6 +78,24 @@ defmodule Peep.Handler.Config do
   defp compile_tag_fn(_tag_values, []), do: fn _metadata -> %{} end
   defp compile_tag_fn(_tag_values, tags) when is_function(tags, 1), do: tags
 
+  defp compile_tag_fn(tag_values, [k1]) do
+    fn metadata ->
+      case tag_values.(metadata) do
+        %{^k1 => v1} -> %{k1 => v1}
+        _ -> %{}
+      end
+    end
+  end
+
+  defp compile_tag_fn(tag_values, [k1, k2] = keys) do
+    fn metadata ->
+      case tag_values.(metadata) do
+        %{^k1 => v1, ^k2 => v2} -> %{k1 => v1, k2 => v2}
+        other -> Map.take(other, keys)
+      end
+    end
+  end
+
   defp compile_tag_fn(tag_values, keys) do
     fn metadata -> Map.take(tag_values.(metadata), keys) end
   end
