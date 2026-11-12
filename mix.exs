@@ -57,7 +57,8 @@ defmodule Peep.MixProject do
       canonical: "http://hexdocs.pm/peep",
       source_url: "https://github.com/rkallos/peep",
       source_ref: "v#{@version}",
-      extras: [],
+      extras: ["CHANGELOG.md"],
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
       groups_for_modules: [
         Storage: [~r/Peep.Storage/],
         Bucketing: [~r/Peep.Buckets/]
@@ -75,8 +76,11 @@ defmodule Peep.MixProject do
     [
       maintainers: ["Richard Kallos", "Fabien Lamarche-Filion"],
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => "https://github.com/rkallos/peep"},
-      files: ~w(lib test/shared LICENSE mix.exs README.md)
+      links: %{
+        "GitHub" => "https://github.com/rkallos/peep",
+        "Changelog" => "https://hexdocs.pm/peep/changelog.html"
+      },
+      files: ~w(lib test/shared LICENSE mix.exs README.md CHANGELOG.md)
     ]
   end
 end
