@@ -74,66 +74,32 @@ defmodule BucketsTest do
   end
 
   test "passing a non-number to `use Peep.Buckets.Custom` fails to compile" do
-    ast =
-      quote do
-        defmodule BadBuckets do
-          use Peep.Buckets.Custom, buckets: [1, 2, 3, :four, 5]
-        end
-      end
-
-    assert_raise ArgumentError, fn -> Code.compile_quoted(ast) end
+    assert_raise ArgumentError, fn -> custom_buckets([1, 2, 3, :four, 5]) end
   end
 
   test "buckets passed to `Peep.Buckets.Custom` can be values to be computed" do
-    ast =
-      quote do
-        defmodule CompTimeValues do
-          use Peep.Buckets.Custom,
-            buckets: [
-              :timer.seconds(1),
-              :timer.seconds(2),
-              :timer.seconds(5)
-            ]
-        end
-      end
-
-    assert Code.compile_quoted(ast)
+    quote(do: [:timer.seconds(1), :timer.seconds(2), :timer.seconds(5)])
+    |> custom_buckets()
+    |> check(exp_buckets: %{999 => 0, 1_000 => 1, 2_000 => 2, 5_000 => 3})
   end
 
   test "whole list may be a set of computable values" do
-    ast =
-      quote do
-        defmodule CompTimeList do
-          use Peep.Buckets.Custom,
-            buckets: Enum.map(1..10, &:timer.seconds/1)
-        end
-      end
-
-    assert Code.compile_quoted(ast)
+    quote(do: Enum.map(1..10, &:timer.seconds/1))
+    |> custom_buckets()
+    |> check(exp_buckets: %{999 => 0, 1_000 => 1, 9_999 => 9, 10_000 => 10})
   end
 
   test "buckets can be read from variable" do
-    ast =
-      quote do
-        defmodule VariableList do
-          buckets = Enum.map(1..10, &:timer.seconds/1)
-
-          use Peep.Buckets.Custom,
-            buckets: buckets
-        end
-      end
-
-    assert Code.compile_quoted(ast)
+    quote do
+      buckets = Enum.map(1..10, &:timer.seconds/1)
+      use Peep.Buckets.Custom, buckets: buckets
+    end
+    |> compile_module()
+    |> check(exp_buckets: %{999 => 0, 1_000 => 1, 9_999 => 9, 10_000 => 10})
   end
 
   test "buckets passed to `use Peep.Buckets.Custom` are deduplicated" do
-    [{module, _binary}] =
-      quote do
-        defmodule DupeBuckets do
-          use Peep.Buckets.Custom, buckets: [1, 1, 1.0, 2, 2.0, 3]
-        end
-      end
-      |> Code.compile_quoted()
+    module = custom_buckets([1, 1, 1.0, 2, 2.0, 3])
 
     assert module.number_of_buckets(%{}) == 3
     check(module, exp_buckets: %{0 => 0, 1 => 1, 2 => 2, 3 => 3})
@@ -163,6 +129,19 @@ defmodule BucketsTest do
     <<bits::unsigned-integer-64>> = <<x::float-64>>
     <<below::float-64>> = <<bits - 1::unsigned-integer-64>>
     below
+  end
+
+  defp custom_buckets(buckets) do
+    compile_module(quote(do: use(Peep.Buckets.Custom, buckets: unquote(buckets))))
+  end
+
+  defp compile_module(body) do
+    name = Module.concat(__MODULE__, "Compiled#{System.unique_integer([:positive])}")
+
+    [{module, _binary}] =
+      Code.compile_quoted(quote(do: defmodule(unquote(name), do: unquote(body))))
+
+    module
   end
 
   defp check(mod, opts) do
