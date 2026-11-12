@@ -1,50 +1,6 @@
 defmodule Peep.Test do
   @moduledoc false
   alias Telemetry.Metrics
-  require Peep.Persistent
-
-  def insert_metric(name, metric, value, tags) when is_number(value) do
-    case Peep.Persistent.fetch(name) do
-      Peep.Persistent.persistent(
-        storage: {storage_mod, storage},
-        ids_to_metrics: ids_to_metrics
-      ) ->
-        case find_metric_id(ids_to_metrics, metric) do
-          {:ok, id} ->
-            insert_one(storage_mod, storage, id, metric, value, tags)
-
-          :error ->
-            nil
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  def insert_metric(_name, _metric, _value, _tags), do: nil
-
-  defp insert_one(storage_mod, storage, id, metric, value, tags) do
-    resolved = storage_mod.resolve(storage)
-
-    case Peep.Storage.insert_shape(storage_mod) do
-      :batched -> storage_mod.insert_metrics(resolved, {tags}, [{id, metric, value, 0}])
-      :per_metric -> storage_mod.insert_metric(resolved, id, metric, value, tags)
-    end
-  end
-
-  defp find_metric_id(ids_to_metrics, metric) do
-    find_metric_id(ids_to_metrics, metric, tuple_size(ids_to_metrics), 0)
-  end
-
-  defp find_metric_id(_tuple, _metric, size, size), do: :error
-
-  defp find_metric_id(tuple, metric, size, idx) do
-    case elem(tuple, idx) do
-      ^metric -> {:ok, idx}
-      _ -> find_metric_id(tuple, metric, size, idx + 1)
-    end
-  end
 
   def fresh_id do
     :"#{System.unique_integer([:positive])}"
@@ -56,17 +12,25 @@ defmodule Peep.Test do
     name
   end
 
-  def get_metric(all_metrics, metric, tags) do
-    tags = to_map(tags)
-    tags_map = Map.get(all_metrics, metric, %{})
+  @doc """
+  The scraped series of `dist` after it records `values`: every bucket its
+  calculator defines, keyed by `c:Peep.Buckets.upper_bound/2`, plus
+  `:infinity` and `:sum`.
+  """
+  def distribution_series(%Metrics.Distribution{} = dist, values) do
+    {mod, config} = Peep.Buckets.config(dist)
+    n = mod.number_of_buckets(config)
 
-    case metric do
-      %Metrics.Counter{} -> Map.get(tags_map, tags, 0)
-      %Metrics.Sum{} -> Map.get(tags_map, tags, 0)
-      _other -> Map.get(tags_map, tags)
-    end
+    empty =
+      0..(n - 1)//1
+      |> Map.new(&{mod.upper_bound(&1, config), 0})
+      |> Map.merge(%{infinity: 0, sum: 0})
+
+    Enum.reduce(values, empty, fn value, series ->
+      idx = mod.bucket_for(value, config)
+      key = if idx < n, do: mod.upper_bound(idx, config), else: :infinity
+
+      %{series | key => series[key] + 1, sum: series.sum + round(value)}
+    end)
   end
-
-  defp to_map(tags) when is_map(tags), do: tags
-  defp to_map(tags) when is_list(tags), do: Map.new(tags)
 end

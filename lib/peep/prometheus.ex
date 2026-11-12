@@ -8,6 +8,7 @@ defmodule Peep.Prometheus do
       |> Peep.Prometheus.export()
   """
 
+  alias Peep.Conversion
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum}
 
   def export(metrics) do
@@ -31,23 +32,25 @@ defmodule Peep.Prometheus do
     help = ["# HELP ", name, " ", escape_help(metric.description)]
     type = ["# TYPE ", name, " histogram"]
 
+    factor = Conversion.factor(metric)
+
     distributions =
       Enum.map(tagged_series, fn {tags, buckets} ->
-        format_distribution(name, tags, buckets)
+        format_distribution(name, tags, buckets, factor)
       end)
 
     [help, ?\n, type, ?\n, distributions]
   end
 
-  defp format_distribution(name, tags, buckets) do
+  defp format_distribution(name, tags, buckets, factor) do
     has_labels? = not Enum.empty?(tags)
 
-    buckets_as_floats =
+    converted_buckets =
       Map.drop(buckets, [:sum, :infinity])
-      |> Enum.map(fn {bucket_string, count} -> {String.to_float(bucket_string), count} end)
+      |> Enum.map(fn {upper_bound, count} -> {Conversion.convert(upper_bound, factor), count} end)
       |> Enum.sort()
 
-    {prefix_sums, count} = prefix_sums(buckets_as_floats)
+    {prefix_sums, count} = prefix_sums(converted_buckets)
 
     {labels_done, bucket_partial} =
       if has_labels? do
@@ -64,13 +67,13 @@ defmodule Peep.Prometheus do
         [bucket_partial, format_value(upper_bound), "\"} ", Integer.to_string(count), ?\n]
       end)
 
-    sum = Map.get(buckets, :sum, 0)
+    sum = Conversion.convert(Map.get(buckets, :sum, 0), factor)
     inf = Map.get(buckets, :infinity, 0)
 
     [
       samples,
       [bucket_partial, "+Inf\"} ", Integer.to_string(count + inf), ?\n],
-      [name, "_sum", labels_done, Integer.to_string(sum), ?\n],
+      [name, "_sum", labels_done, format_value(sum), ?\n],
       [name, "_count", labels_done, Integer.to_string(count + inf), ?\n]
     ]
   end
@@ -79,10 +82,12 @@ defmodule Peep.Prometheus do
     name = format_name(metric.name)
     help = ["# HELP ", name, " ", escape_help(metric.description)]
     type = ["# TYPE ", name, " ", to_string(type)]
+    factor = Conversion.factor(metric)
 
     samples =
       Enum.map(series, fn {labels, value} ->
         has_labels? = not Enum.empty?(labels)
+        value = Conversion.convert(value, factor)
 
         if has_labels? do
           [name, ?{, format_labels(labels), ?}, " ", format_value(value), ?\n]
@@ -121,9 +126,6 @@ defmodule Peep.Prometheus do
   defp format_name_rest(<<_, rest::binary>>, acc), do: format_name_rest(rest, acc)
   defp format_name_rest(<<>>, acc), do: acc
 
-  defp format_value(true), do: "1"
-  defp format_value(false), do: "0"
-  defp format_value(nil), do: "0"
   defp format_value(n) when is_integer(n), do: Integer.to_string(n)
   defp format_value(f) when is_float(f), do: Float.to_string(f)
 

@@ -62,10 +62,35 @@ defmodule Peep do
 
   ## Supported `:reporter_options`
 
-  - `:prometheus_type` - when using `sum/2` or `last_value/2` you can use this
-    option to define Prometheus' type used by such metric. By default `sum/2`
-    uses `counter` and `last_value/2` uses `gauge`. It can be useful when some
-    values are already precomputed, for example presummed socket stats.
+  ### `:prometheus_type`
+
+  When using `Telemetry.Metrics.sum/2` or `Telemetry.Metrics.last_value/2`, you
+  can use this option to define the Prometheus type used by the metric. By
+  default, `sum/2` uses `counter` and `last_value/2` uses `gauge`. It can be
+  useful when some values are already precomputed, for example presummed
+  socket stats.
+
+  ### `:peep_export_conversion_factor`
+
+  A positive number that scales the values of a `Telemetry.Metrics.sum/2`,
+  `Telemetry.Metrics.last_value/2` or `Telemetry.Metrics.distribution/2` when
+  they are exported.
+
+  For example, to store durations as nanoseconds and report them as seconds:
+
+      distribution("http.request.duration",
+        unit: :nanosecond,
+        reporter_options: [
+          max_value: 60_000_000_000,
+          peep_export_conversion_factor: 1.0e-9
+        ]
+      )
+
+  Note: Unlike this option, setting [`:unit`](`m:Telemetry.Metrics#module-converting-units`)
+  in a `Telemetry.Metrics` struct does affect Peep's storage of distributions.
+  The recommendation is to store distribution sample measurements in a
+  granularity fine enough to spread most of the distribution over several
+  buckets, then to set `:peep_export_conversion_factor`.
   """
   use GenServer
 
@@ -121,6 +146,17 @@ defmodule Peep do
   end
 
   @doc """
+  Sends StatsD metrics now, without waiting for the next flush interval.
+
+  Returns `:ok` once the packets are sent. Does nothing if the worker has no
+  `:statsd` options.
+  """
+  @spec statsd_flush(GenServer.server()) :: :ok
+  def statsd_flush(peep) do
+    GenServer.call(peep, :statsd_flush)
+  end
+
+  @doc """
   Fetches all metrics from the worker. Called when preparing Prometheus or
   StatsD data.
   """
@@ -172,27 +208,42 @@ defmodule Peep do
     false
   end
 
-  def allow_metric?(%Telemetry.Metrics.Distribution{reporter_options: opts} = metric) do
-    key = :max_value
+  def allow_metric?(%Telemetry.Metrics.Distribution{} = metric) do
+    valid_option?(metric, :max_value, &is_number/1, "a number") and
+      valid_conversion_factor?(metric)
+  end
 
-    case Keyword.get(opts, key) do
-      nil ->
+  def allow_metric?(%Telemetry.Metrics.Counter{}) do
+    true
+  end
+
+  def allow_metric?(metric) do
+    valid_conversion_factor?(metric)
+  end
+
+  defp valid_conversion_factor?(metric) do
+    valid_option?(
+      metric,
+      :peep_export_conversion_factor,
+      &(is_number(&1) and &1 > 0),
+      "a positive number"
+    )
+  end
+
+  defp valid_option?(%{name: name, reporter_options: opts}, key, valid?, expected) do
+    value = Keyword.get(opts, key)
+
+    case is_nil(value) or valid?.(value) do
+      true ->
         true
 
-      n when is_number(n) ->
-        true
-
-      _ ->
+      false ->
         Logger.warning(
-          "Distributions must have a numeric value assigned to #{inspect(key)} in reporter_options. Dropping #{inspect(metric.name)}"
+          "#{inspect(key)} in reporter_options must be #{expected}. Dropping #{inspect(name)}"
         )
 
         false
     end
-  end
-
-  def allow_metric?(_) do
-    true
   end
 
   # callbacks
@@ -229,20 +280,19 @@ defmodule Peep do
   end
 
   @impl true
+  def handle_call(:statsd_flush, _from, state) do
+    {:reply, :ok, flush_statsd(state)}
+  end
+
+  @impl true
   def handle_info(:statsd_flush, %State{statsd_state: nil} = state) do
     {:noreply, state}
   end
 
-  def handle_info(
-        :statsd_flush,
-        %State{name: name, statsd_state: statsd_state, statsd_opts: statsd_opts} = state
-      ) do
-    new_statsd_state =
-      Peep.get_all_metrics(name)
-      |> Statsd.make_and_send_packets(statsd_state)
-
+  def handle_info(:statsd_flush, %State{statsd_opts: statsd_opts} = state) do
+    new_state = flush_statsd(state)
     set_statsd_timer(statsd_opts[:flush_interval_ms])
-    {:noreply, %State{state | statsd_state: new_statsd_state}}
+    {:noreply, new_state}
   end
 
   def handle_info(_msg, state) do
@@ -262,6 +312,16 @@ defmodule Peep do
   end
 
   # private
+
+  defp flush_statsd(%State{statsd_state: nil} = state), do: state
+
+  defp flush_statsd(%State{name: name, statsd_state: statsd_state} = state) do
+    new_statsd_state =
+      Peep.get_all_metrics(name)
+      |> Statsd.make_and_send_packets(statsd_state)
+
+    %State{state | statsd_state: new_statsd_state}
+  end
 
   defp set_statsd_timer(interval) do
     Process.send_after(self(), :statsd_flush, interval)

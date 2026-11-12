@@ -19,6 +19,9 @@ defmodule Peep.Storage do
   """
   alias Telemetry.Metrics
 
+  @typep persistent() :: Peep.Persistent.t()
+  @typep ids_to_metrics() :: Peep.Persistent.ids_to_metrics()
+
   @doc """
   Creates a new term representing a Peep storage backend.
   """
@@ -56,7 +59,7 @@ defmodule Peep.Storage do
   @doc """
   Retrieves all stored metrics
   """
-  @callback get_all_metrics(term(), Peep.Persistent.t()) :: map()
+  @callback get_all_metrics(term(), persistent()) :: map()
 
   @doc """
   Removes metrics whose metadata contains a specific tag key and value.
@@ -66,12 +69,28 @@ defmodule Peep.Storage do
   @callback prune_tags(term(), [%{Metrics.tag() => term()}]) :: :ok
 
   @doc """
+  Called once when Peep starts to inform a backend about Peep's metrics.
+
+  Each distribution carries `:peep_buckets`: unique `{boundary, upper_bound}`
+  pairs of floats sorted by boundary. A sample below `boundary`, and not below
+  the boundary before it, belongs to that bucket. A distribution's series is
+  keyed by `upper_bound`, which is what the exporters report.
+
+  The two can differ: for `Peep.Buckets.Exponential`, `boundary` is the
+  smallest float above the bucket, a few floats away from `upper_bound`.
+  """
+  @callback register_metrics(
+              storage :: term(),
+              ids_to_metrics :: ids_to_metrics()
+            ) :: :ok
+
+  @doc """
   Resolves storage to its per-scheduler form for the current scheduler.
   Called once per event to avoid redundant scheduler lookups across metrics.
   """
   @callback resolve(term()) :: term()
 
-  @optional_callbacks insert_metric: 5, insert_metrics: 3
+  @optional_callbacks insert_metric: 5, insert_metrics: 3, register_metrics: 2
 
   @doc false
   @spec insert_shape(module()) :: :batched | :per_metric
@@ -91,5 +110,19 @@ defmodule Peep.Storage do
               "storage module #{inspect(storage_mod)} exports neither " <>
                 "insert_metric/5 nor insert_metrics/3"
     end
+  end
+
+  @doc false
+  def float_sum!(storage_mod, %Metrics.Sum{name: name}, value) do
+    raise ArgumentError,
+          "#{inspect(storage_mod)} can't add the float #{value} to the sum #{inspect(name)}: " <>
+            "it adds only integers to a sum. To report a sum in another unit, set " <>
+            ":peep_export_conversion_factor in its :reporter_options instead of converting with :unit"
+  end
+
+  @doc false
+  @spec registers_metrics?(module()) :: boolean()
+  def registers_metrics?(storage_mod) do
+    Code.ensure_loaded?(storage_mod) and function_exported?(storage_mod, :register_metrics, 2)
   end
 end

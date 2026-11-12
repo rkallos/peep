@@ -57,9 +57,13 @@ defmodule Peep.Storage.Striped do
     :ets.update_counter(tid, key, {2, 1}, {key, 0})
   end
 
-  def insert_metric(tid, id, %Metrics.Sum{}, value, %{} = tags) do
+  def insert_metric(tid, id, %Metrics.Sum{}, value, %{} = tags) when is_integer(value) do
     key = {id, tags}
     :ets.update_counter(tid, key, {2, value}, {key, 0})
+  end
+
+  def insert_metric(_tid, _id, %Metrics.Sum{} = metric, value, _tags) do
+    Storage.float_sum!(__MODULE__, metric, value)
   end
 
   def insert_metric(tid, id, %Metrics.LastValue{}, value, %{} = tags) do

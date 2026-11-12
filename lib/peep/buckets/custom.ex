@@ -20,6 +20,9 @@ defmodule Peep.Buckets.Custom do
       end
 
       @impl true
+      def boundaries(_), do: unquote(buckets)
+
+      @impl true
       def config(_), do: %{}
 
       @impl true
@@ -68,10 +71,10 @@ defmodule Peep.Buckets.Custom do
       def upper_bound(_, _)
 
       for {boundary, bucket_idx} <- Enum.with_index(buckets) do
-        def upper_bound(unquote(bucket_idx), _), do: unquote(to_string(boundary * 1.0))
+        def upper_bound(unquote(bucket_idx), _), do: unquote(boundary * 1.0)
       end
 
-      def upper_bound(_, _), do: "+Inf"
+      def upper_bound(_, _), do: :infinity
     end
   end
 

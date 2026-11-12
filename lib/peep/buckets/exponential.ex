@@ -18,6 +18,32 @@ defmodule Peep.Buckets.Exponential do
   alias Telemetry.Metrics
 
   @impl true
+  def boundaries(config) do
+    for i <- 0..(number_of_buckets(config) - 1), do: first_above(i, config)
+  end
+
+  # The smallest float that bucket_for/2 puts above bucket i. Its rounding
+  # moves that float a few floats away from gamma^i.
+  defp first_above(i, %{gamma: gamma} = config) do
+    :math.pow(gamma, i)
+    |> step_while(-1, &(bucket_for(&1, config) > i))
+    |> step_while(1, &(bucket_for(&1, config) <= i))
+  end
+
+  defp step_while(x, step, continue?) do
+    case continue?.(x) do
+      true -> step_while(adjacent_float(x, step), step, continue?)
+      false -> x
+    end
+  end
+
+  defp adjacent_float(x, step) when is_float(x) and x > 0.0 do
+    <<bits::unsigned-integer-64>> = <<x::float-64>>
+    <<adjacent::float-64>> = <<bits + step::unsigned-integer-64>>
+    adjacent
+  end
+
+  @impl true
   def config(%Metrics.Distribution{reporter_options: opts}) do
     max_value =
       Keyword.get(opts, :max_value, @default_max_value)
@@ -52,6 +78,5 @@ defmodule Peep.Buckets.Exponential do
   @impl true
   def upper_bound(bucket, %{gamma: gamma}) do
     :math.pow(gamma, bucket)
-    |> :erlang.float_to_binary([:compact, {:decimals, 6}])
   end
 end
