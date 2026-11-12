@@ -14,7 +14,7 @@ defmodule Peep.Test do
 
   @doc """
   The scraped series of `dist` after it records `values`: every bucket its
-  calculator defines, labelled by `c:Peep.Buckets.upper_bound/2`, plus
+  calculator defines, keyed by `c:Peep.Buckets.upper_bound/2`, plus
   `:infinity` and `:sum`.
   """
   def distribution_series(%Metrics.Distribution{} = dist, values) do
@@ -28,9 +28,9 @@ defmodule Peep.Test do
 
     Enum.reduce(values, empty, fn value, series ->
       idx = mod.bucket_for(value, config)
-      label = if idx < n, do: mod.upper_bound(idx, config), else: :infinity
+      key = if idx < n, do: mod.upper_bound(idx, config), else: :infinity
 
-      %{series | label => series[label] + 1, sum: series.sum + round(value)}
+      %{series | key => series[key] + 1, sum: series.sum + round(value)}
     end)
   end
 end

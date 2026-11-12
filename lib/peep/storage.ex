@@ -71,8 +71,13 @@ defmodule Peep.Storage do
   @doc """
   Called once when Peep starts to inform a backend about Peep's metrics.
 
-  Each distribution carries `:peep_buckets`: unique `{upper_bound, label}`
-  pairs sorted by upper bound (which is always a float).
+  Each distribution carries `:peep_buckets`: unique `{boundary, upper_bound}`
+  pairs of floats sorted by boundary. A sample below `boundary`, and not below
+  the boundary before it, belongs to that bucket. A distribution's series is
+  keyed by `upper_bound`, which is what the exporters report.
+
+  The two can differ: for `Peep.Buckets.Exponential`, `boundary` is the
+  smallest float above the bucket, a few floats away from `upper_bound`.
   """
   @callback register_metrics(
               storage :: term(),

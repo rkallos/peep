@@ -45,14 +45,12 @@ defmodule Peep.Prometheus do
   defp format_distribution(name, tags, buckets, factor) do
     has_labels? = not Enum.empty?(tags)
 
-    buckets_as_floats =
+    converted_buckets =
       Map.drop(buckets, [:sum, :infinity])
-      |> Enum.map(fn {bucket_string, count} ->
-        {Conversion.convert(String.to_float(bucket_string), factor), count}
-      end)
+      |> Enum.map(fn {upper_bound, count} -> {Conversion.convert(upper_bound, factor), count} end)
       |> Enum.sort()
 
-    {prefix_sums, count} = prefix_sums(buckets_as_floats)
+    {prefix_sums, count} = prefix_sums(converted_buckets)
 
     {labels_done, bucket_partial} =
       if has_labels? do

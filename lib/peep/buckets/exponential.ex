@@ -78,6 +78,5 @@ defmodule Peep.Buckets.Exponential do
   @impl true
   def upper_bound(bucket, %{gamma: gamma}) do
     :math.pow(gamma, bucket)
-    |> :erlang.float_to_binary([:compact, {:decimals, 6}])
   end
 end

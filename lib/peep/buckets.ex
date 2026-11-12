@@ -60,7 +60,7 @@ defmodule Peep.Buckets do
   @callback config(Metrics.Distribution.t()) :: config
   @callback number_of_buckets(config) :: pos_integer
   @callback bucket_for(number, config) :: non_neg_integer
-  @callback upper_bound(non_neg_integer, config) :: String.t()
+  @callback upper_bound(non_neg_integer, config) :: float() | :infinity
 
   @spec config(Metrics.Distribution.t()) :: {atom, config}
   def config(%Metrics.Distribution{reporter_options: opts} = metric) do

@@ -120,7 +120,7 @@ defmodule Peep.Statsd do
         _ -> "ms"
       end
 
-    [name, ?:, to_string(bucket), ?|, type_bytes, "|@", f2b(1.0 / count), tags]
+    [name, ?:, Float.to_string(bucket), ?|, type_bytes, "|@", f2b(1.0 / count), tags]
   end
 
   defp converted(value, 1), do: n2b(value)

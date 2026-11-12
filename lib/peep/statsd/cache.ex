@@ -94,23 +94,13 @@ defmodule Peep.Statsd.Cache do
 
           to_add =
             for {bucket, count} <- buckets, bucket != :sum, bucket != :infinity, into: %{} do
-              formatted_bucket = format_bucket(bucket, factor)
-              {{:dist, formatted_name, formatted_tags, formatted_bucket}, count}
+              {{:dist, formatted_name, formatted_tags, Conversion.convert(bucket, factor)}, count}
             end
 
           Map.merge(acc, to_add)
       end
 
     %{cache | kv: new_kv}
-  end
-
-  defp format_bucket(bucket, 1), do: to_string(bucket)
-
-  defp format_bucket(bucket, factor) do
-    bucket
-    |> String.to_float()
-    |> Conversion.convert(factor)
-    |> Float.to_string()
   end
 
   defp format_name(segments) do

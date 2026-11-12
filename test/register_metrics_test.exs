@@ -7,7 +7,7 @@ defmodule Peep.Storage.RegisterMetricsTest do
     @behaviour Peep.Buckets
 
     @boundaries [1000, 10, 1, 10.0, 100]
-    @labels ["big", "ten", "one", "ten again", "big"]
+    @upper_bounds [1000.0, 10.0, 1.0, 11.0, 1000.0]
 
     @impl true
     def config(_), do: %{}
@@ -22,7 +22,7 @@ defmodule Peep.Storage.RegisterMetricsTest do
     def bucket_for(_, _), do: 0
 
     @impl true
-    def upper_bound(idx, _), do: Enum.at(@labels, idx, "+Inf")
+    def upper_bound(idx, _), do: Enum.at(@upper_bounds, idx, :infinity)
   end
 
   test "a backend exporting register_metrics/2 is passed the metrics at startup" do
@@ -43,7 +43,7 @@ defmodule Peep.Storage.RegisterMetricsTest do
     )
   end
 
-  test "registered buckets are sorted, with no repeated bound or label" do
+  test "registered buckets are sorted, with no repeated boundary or upper bound" do
     dist =
       Metrics.distribution("register.test.unsorted",
         reporter_options: [peep_bucket_calculator: UnsortedBuckets]
@@ -51,8 +51,7 @@ defmodule Peep.Storage.RegisterMetricsTest do
 
     check(
       metrics: [dist],
-      exp_registered:
-        {Map.put(dist, :peep_buckets, [{1.0, "one"}, {10.0, "ten"}, {1000.0, "big"}])}
+      exp_registered: {Map.put(dist, :peep_buckets, [{1.0, 1.0}, {10.0, 10.0}, {1000.0, 1000.0}])}
     )
   end
 
