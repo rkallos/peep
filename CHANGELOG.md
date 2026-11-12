@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-11-12
+
 ### Added
 
 - The `:peep_export_conversion_factor` reporter option. The values of a sum, a
@@ -344,7 +346,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
-[unreleased]: https://github.com/rkallos/peep/compare/v5.1.0...HEAD
+[unreleased]: https://github.com/rkallos/peep/compare/v6.0.0...HEAD
+[6.0.0]: https://github.com/rkallos/peep/compare/v5.1.0...v6.0.0
 [5.1.0]: https://github.com/rkallos/peep/compare/v5.0.1...v5.1.0
 [5.0.1]: https://github.com/rkallos/peep/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/rkallos/peep/compare/v4.4.0...v5.0.0
